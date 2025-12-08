@@ -1,6 +1,6 @@
 // GoGio API client for Chrome Extension
 
-const API_BASE_URL = 'https://api.gogio.io'; // Replace with actual API base URL
+const API_BASE_URL = 'https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1';
 
 export interface Organization {
   id: string;
