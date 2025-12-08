@@ -15,8 +15,9 @@ export interface Job {
 
 export interface Stage {
   id: string;
-  name: string;
-  job_id: string;
+  stage_name: string;
+  stage_type?: string;
+  position?: number;
 }
 
 export interface UserInfo {
