@@ -82,15 +82,18 @@ class ApiClient {
   }
 
   async getOrganizations(): Promise<Organization[]> {
-    return this.request<Organization[]>('/chrome-api-organizations');
+    const response = await this.request<{ organizations: Organization[] }>('/chrome-api-organizations');
+    return response.organizations ?? [];
   }
 
   async getJobs(organizationId: string): Promise<Job[]> {
-    return this.request<Job[]>(`/chrome-api-jobs?organization_id=${organizationId}`);
+    const response = await this.request<{ jobs: Job[] }>(`/chrome-api-jobs?organization_id=${organizationId}`);
+    return response.jobs ?? [];
   }
 
   async getStages(jobId: string): Promise<Stage[]> {
-    return this.request<Stage[]>(`/chrome-api-stages?job_id=${jobId}`);
+    const response = await this.request<{ stages: Stage[] }>(`/chrome-api-stages?job_id=${jobId}`);
+    return response.stages ?? [];
   }
 
   async submitCandidate(payload: CandidatePayload): Promise<{ success: boolean; candidateId?: string }> {

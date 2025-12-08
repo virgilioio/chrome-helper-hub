@@ -40,11 +40,12 @@ export function useDropdownData(): UseDropdownDataReturn {
     setError(null);
     try {
       const orgs = await apiClient.getOrganizations();
-      setOrganizations(orgs);
+      const orgsList = Array.isArray(orgs) ? orgs : [];
+      setOrganizations(orgsList);
       
       // Restore last used organization
       const prefs = await getStoredPreferences();
-      if (prefs.lastOrganizationId && orgs.some(o => o.id === prefs.lastOrganizationId)) {
+      if (prefs.lastOrganizationId && orgsList.some(o => o.id === prefs.lastOrganizationId)) {
         setSelectedOrgIdState(prefs.lastOrganizationId);
       }
     } catch (err) {
@@ -66,7 +67,8 @@ export function useDropdownData(): UseDropdownDataReturn {
       setIsLoadingJobs(true);
       setError(null);
       try {
-        const jobsList = await apiClient.getJobs(selectedOrgId);
+        const jobsResult = await apiClient.getJobs(selectedOrgId);
+        const jobsList = Array.isArray(jobsResult) ? jobsResult : [];
         setJobs(jobsList);
         
         // Restore last used job if it belongs to this org
@@ -98,7 +100,8 @@ export function useDropdownData(): UseDropdownDataReturn {
       setIsLoadingStages(true);
       setError(null);
       try {
-        const stagesList = await apiClient.getStages(selectedJobId);
+        const stagesResult = await apiClient.getStages(selectedJobId);
+        const stagesList = Array.isArray(stagesResult) ? stagesResult : [];
         setStages(stagesList);
         
         // Restore last used stage if it belongs to this job
