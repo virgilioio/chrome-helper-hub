@@ -212,7 +212,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                 </SelectTrigger>
                 <SelectContent className="bg-popover border-border">
                   {stages.map((stage) => (
-                    <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                    <SelectItem key={stage.id} value={stage.id}>{stage.stage_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
