@@ -1,21 +1,24 @@
 import React from 'react';
+import logoImage from '@/assets/gogio-logo.png';
 
 interface GoGioLogoProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  variant?: 'icon' | 'wordmark';
 }
 
-export const GoGioLogo: React.FC<GoGioLogoProps> = ({ size = 'md', className = '' }) => {
+export const GoGioLogo: React.FC<GoGioLogoProps> = ({ size = 'md', className = '', variant = 'wordmark' }) => {
   const sizeClasses = {
-    sm: 'text-xl',
-    md: 'text-2xl',
-    lg: 'text-3xl',
+    sm: 'h-6',
+    md: 'h-8',
+    lg: 'h-10',
   };
 
   return (
-    <div className={`font-heading font-bold ${sizeClasses[size]} ${className}`}>
-      <span className="text-primary">Go</span>
-      <span className="text-foreground">Gio</span>
-    </div>
+    <img 
+      src={logoImage} 
+      alt="GoGio" 
+      className={`${sizeClasses[size]} w-auto object-contain ${className}`}
+    />
   );
 };
