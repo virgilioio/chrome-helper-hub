@@ -16,6 +16,8 @@ export default {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
         heading: ['Poppins', 'sans-serif'],
+        inter: ['Inter', 'sans-serif'],
+        poppins: ['Poppins', 'sans-serif'],
       },
       fontSize: {
         'xs': ['11px', { lineHeight: '1.4' }],
@@ -33,6 +35,16 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        virgilio: {
+          purple: "hsl(var(--virgilio-purple))",
+          "purple-dark": "hsl(var(--virgilio-purple-dark))",
+          "purple-light": "hsl(var(--virgilio-purple-light))",
+          text: "hsl(var(--virgilio-text))",
+          border: "hsl(var(--virgilio-border))",
+        },
+        "text-secondary": "hsl(var(--text-secondary))",
+        "text-tertiary": "hsl(var(--text-tertiary))",
+        "lilac-frost": "hsl(var(--lilac-frost))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -44,6 +56,7 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          bg: "hsl(var(--destructive-bg))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
