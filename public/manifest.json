@@ -5,7 +5,17 @@
   "version": "0.1.0",
   "action": {
     "default_popup": "index.html",
-    "default_title": "GoGio"
+    "default_title": "GoGio",
+    "default_icon": {
+      "16": "icon-128.png",
+      "48": "icon-128.png",
+      "128": "icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icon-128.png",
+    "48": "icon-128.png",
+    "128": "icon-128.png"
   },
   "permissions": [
     "storage",
