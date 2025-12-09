@@ -213,80 +213,120 @@ function waitForElement(selector: string, timeout: number): Promise<Element | nu
  * Opens the modal, extracts data, then closes it
  */
 export async function extractContactInfo(): Promise<ContactInfoData> {
-  const emptyResult: ContactInfoData = { email: null, phone: null, website: null, twitter: null };
-
-  try {
-    // Find the contact info link/button
-    const contactLink = 
-      document.querySelector('a[href*="contact-info"]') ||
-      document.querySelector('#top-card-text-details-contact-info') ||
-      document.querySelector('[data-control-name="contact_see_more"]');
-
-    if (!contactLink) {
-      console.log('[GoGio] Contact info link not found');
-      return emptyResult;
-    }
-
-    // Click to open modal
-    (contactLink as HTMLElement).click();
-
-    // Wait for modal to appear
-    const modal = await waitForElement('.pv-contact-info, .artdeco-modal__content', 3000);
-
-    if (!modal) {
-      console.log('[GoGio] Contact info modal did not open');
-      return emptyResult;
-    }
-
-    // Small delay to ensure content is loaded
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // Extract email
-    const emailLink = modal.querySelector('a[href^="mailto:"]');
-    const email = emailLink?.textContent?.trim() || 
-                  emailLink?.getAttribute('href')?.replace('mailto:', '') || null;
-
-    // Extract phone
-    const phoneSection = modal.querySelector('section.ci-phone, [class*="ci-phone"]');
-    const phoneLink = phoneSection?.querySelector('a[href^="tel:"]') || modal.querySelector('a[href^="tel:"]');
-    const phone = phoneLink?.textContent?.trim() || 
-                  phoneLink?.getAttribute('href')?.replace('tel:', '') || null;
-
-    // Extract website (exclude linkedin, twitter, mailto, tel links)
-    const websiteLinks = modal.querySelectorAll('a[href]');
-    let website: string | null = null;
-    websiteLinks.forEach((link) => {
-      const href = link.getAttribute('href') || '';
-      if (!website && 
-          !href.includes('linkedin.com') && 
-          !href.includes('twitter.com') && 
-          !href.includes('x.com') &&
-          !href.startsWith('mailto:') && 
-          !href.startsWith('tel:') &&
-          (href.startsWith('http://') || href.startsWith('https://'))) {
-        website = href;
-      }
-    });
-
-    // Extract Twitter/X
-    const twitterLink = modal.querySelector('a[href*="twitter.com"], a[href*="x.com"]');
-    const twitter = twitterLink?.getAttribute('href') || null;
-
-    // Close the modal
-    const closeButton = 
-      modal.closest('.artdeco-modal')?.querySelector('button[aria-label="Dismiss"], button.artdeco-modal__dismiss') ||
-      document.querySelector('.artdeco-modal button[aria-label="Dismiss"]') ||
-      document.querySelector('.artdeco-modal__dismiss');
-    
-    if (closeButton) {
-      (closeButton as HTMLElement).click();
-    }
-
-    console.log('[GoGio] Extracted contact info:', { email, phone, website, twitter });
-    return { email, phone, website, twitter };
-
-  } catch (error) {
-    console.error('[GoGio] Error extracting contact info:', error);
-    return emptyResult;
+  console.log('[GoGio] Starting contact info extraction...');
+  
+  // Find the contact info link/button - try multiple selectors
+  const contactLink = document.querySelector('#top-card-text-details-contact-info') ||
+                      document.querySelector('a[href*="contact-info"]') ||
+                      document.querySelector('[data-control-name="contact_see_more"]');
+  
+  if (!contactLink) {
+    console.log('[GoGio] No contact info link found');
+    return { email: null, phone: null, website: null, twitter: null };
   }
+  
+  console.log('[GoGio] Found contact link, clicking...');
+  (contactLink as HTMLElement).click();
+  
+  // Wait for modal to appear - try multiple selectors
+  const modalSelectors = [
+    '.pv-contact-info',
+    '.artdeco-modal[role="dialog"]',
+    '[data-test-modal]',
+    '.artdeco-modal--layer-default'
+  ];
+  
+  let modal: Element | null = null;
+  for (const selector of modalSelectors) {
+    modal = await waitForElement(selector, 2000);
+    if (modal) {
+      console.log('[GoGio] Found modal with selector:', selector);
+      break;
+    }
+  }
+  
+  if (!modal) {
+    console.log('[GoGio] Contact info modal did not appear');
+    return { email: null, phone: null, website: null, twitter: null };
+  }
+  
+  // Give the modal content a moment to fully load
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  console.log('[GoGio] Modal content preview:', modal.textContent?.substring(0, 500));
+  
+  let email: string | null = null;
+  let phone: string | null = null;
+  let website: string | null = null;
+  let twitter: string | null = null;
+  
+  // Try to extract from mailto/tel links first
+  const emailLink = modal.querySelector('a[href^="mailto:"]');
+  if (emailLink) {
+    email = emailLink.getAttribute('href')?.replace('mailto:', '')?.trim() || 
+            emailLink.textContent?.trim() || null;
+    console.log('[GoGio] Found email from link:', email);
+  }
+  
+  const phoneLink = modal.querySelector('a[href^="tel:"]');
+  if (phoneLink) {
+    phone = phoneLink.getAttribute('href')?.replace('tel:', '')?.trim() ||
+            phoneLink.textContent?.trim() || null;
+    console.log('[GoGio] Found phone from link:', phone);
+  }
+  
+  // Look for website links (exclude mailto, tel, linkedin, twitter/x)
+  const allLinks = modal.querySelectorAll('a[href]');
+  allLinks.forEach(link => {
+    const href = link.getAttribute('href') || '';
+    if (href.includes('twitter.com') || href.includes('x.com')) {
+      twitter = href;
+      console.log('[GoGio] Found twitter:', twitter);
+    } else if (!href.startsWith('mailto:') && 
+               !href.startsWith('tel:') && 
+               !href.includes('linkedin.com') &&
+               href.startsWith('http')) {
+      website = href;
+      console.log('[GoGio] Found website:', website);
+    }
+  });
+  
+  // Fallback: regex extraction from modal text content
+  if (!email || !phone) {
+    const modalText = modal.textContent || '';
+    
+    if (!email) {
+      const emailMatch = modalText.match(/[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}/);
+      if (emailMatch) {
+        email = emailMatch[0];
+        console.log('[GoGio] Found email via regex:', email);
+      }
+    }
+    
+    if (!phone) {
+      // Match various phone formats
+      const phoneMatch = modalText.match(/(?:\+\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}/);
+      if (phoneMatch) {
+        phone = phoneMatch[0].trim();
+        console.log('[GoGio] Found phone via regex:', phone);
+      }
+    }
+  }
+  
+  // Close the modal
+  const closeButton = modal.querySelector('button[aria-label="Dismiss"]') ||
+                      modal.querySelector('.artdeco-modal__dismiss') ||
+                      modal.querySelector('button.artdeco-button--circle');
+  
+  if (closeButton) {
+    console.log('[GoGio] Closing modal...');
+    (closeButton as HTMLElement).click();
+  } else {
+    // Try pressing Escape as fallback
+    console.log('[GoGio] No close button found, pressing Escape');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  }
+  
+  console.log('[GoGio] Extracted contact info:', { email, phone, website, twitter });
+  return { email, phone, website, twitter };
 }
