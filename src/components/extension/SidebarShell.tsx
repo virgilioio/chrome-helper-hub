@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CandidatePanelApp } from './CandidatePanelApp';
 import { GoGioLogo } from './GoGioLogo';
-import { PanelRightClose } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { X } from 'lucide-react';
 
 // Get the avatar URL - works in both popup and content script contexts
 const getAvatarUrl = (): string => {
@@ -92,21 +91,20 @@ export const SidebarShell: React.FC = () => {
     );
   }
 
-  // Full sidebar when expanded
+  // Full sidebar when expanded - GoGio Design Spec: 320px width
   return (
     <div className="gogio-sidebar">
-      {/* Header */}
+      {/* Header - 48px height */}
       <div className="gogio-sidebar-header">
         <GoGioLogo size="sm" />
-        <Button
-          variant="ghost"
-          size="icon"
+        <button
           className="gogio-collapse-button"
           onClick={handleCollapse}
-          title="Collapse sidebar"
+          title="Close sidebar"
+          aria-label="Close GoGio sidebar"
         >
-          <PanelRightClose className="h-4 w-4" />
-        </Button>
+          <X style={{ width: 16, height: 16 }} />
+        </button>
       </div>
 
       {/* Main content */}
