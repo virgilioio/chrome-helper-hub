@@ -10,6 +10,13 @@ export interface LinkedInProfileData {
   profileUrl: string;
 }
 
+export interface ContactInfoData {
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  twitter: string | null;
+}
+
 function getText(selector: string): string | null {
   const el = document.querySelector(selector);
   return el?.textContent?.trim() || null;
@@ -174,4 +181,112 @@ export function extractProfileData(): LinkedInProfileData {
  */
 export function isLinkedInProfilePage(): boolean {
   return window.location.href.includes('linkedin.com/in/');
+}
+
+/**
+ * Wait for an element to appear in the DOM
+ */
+function waitForElement(selector: string, timeout: number): Promise<Element | null> {
+  return new Promise((resolve) => {
+    const el = document.querySelector(selector);
+    if (el) return resolve(el);
+
+    const observer = new MutationObserver(() => {
+      const foundEl = document.querySelector(selector);
+      if (foundEl) {
+        observer.disconnect();
+        resolve(foundEl);
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeout);
+  });
+}
+
+/**
+ * Extract contact info from LinkedIn's Contact Info modal
+ * Opens the modal, extracts data, then closes it
+ */
+export async function extractContactInfo(): Promise<ContactInfoData> {
+  const emptyResult: ContactInfoData = { email: null, phone: null, website: null, twitter: null };
+
+  try {
+    // Find the contact info link/button
+    const contactLink = 
+      document.querySelector('a[href*="contact-info"]') ||
+      document.querySelector('#top-card-text-details-contact-info') ||
+      document.querySelector('[data-control-name="contact_see_more"]');
+
+    if (!contactLink) {
+      console.log('[GoGio] Contact info link not found');
+      return emptyResult;
+    }
+
+    // Click to open modal
+    (contactLink as HTMLElement).click();
+
+    // Wait for modal to appear
+    const modal = await waitForElement('.pv-contact-info, .artdeco-modal__content', 3000);
+
+    if (!modal) {
+      console.log('[GoGio] Contact info modal did not open');
+      return emptyResult;
+    }
+
+    // Small delay to ensure content is loaded
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Extract email
+    const emailLink = modal.querySelector('a[href^="mailto:"]');
+    const email = emailLink?.textContent?.trim() || 
+                  emailLink?.getAttribute('href')?.replace('mailto:', '') || null;
+
+    // Extract phone
+    const phoneSection = modal.querySelector('section.ci-phone, [class*="ci-phone"]');
+    const phoneLink = phoneSection?.querySelector('a[href^="tel:"]') || modal.querySelector('a[href^="tel:"]');
+    const phone = phoneLink?.textContent?.trim() || 
+                  phoneLink?.getAttribute('href')?.replace('tel:', '') || null;
+
+    // Extract website (exclude linkedin, twitter, mailto, tel links)
+    const websiteLinks = modal.querySelectorAll('a[href]');
+    let website: string | null = null;
+    websiteLinks.forEach((link) => {
+      const href = link.getAttribute('href') || '';
+      if (!website && 
+          !href.includes('linkedin.com') && 
+          !href.includes('twitter.com') && 
+          !href.includes('x.com') &&
+          !href.startsWith('mailto:') && 
+          !href.startsWith('tel:') &&
+          (href.startsWith('http://') || href.startsWith('https://'))) {
+        website = href;
+      }
+    });
+
+    // Extract Twitter/X
+    const twitterLink = modal.querySelector('a[href*="twitter.com"], a[href*="x.com"]');
+    const twitter = twitterLink?.getAttribute('href') || null;
+
+    // Close the modal
+    const closeButton = 
+      modal.closest('.artdeco-modal')?.querySelector('button[aria-label="Dismiss"], button.artdeco-modal__dismiss') ||
+      document.querySelector('.artdeco-modal button[aria-label="Dismiss"]') ||
+      document.querySelector('.artdeco-modal__dismiss');
+    
+    if (closeButton) {
+      (closeButton as HTMLElement).click();
+    }
+
+    console.log('[GoGio] Extracted contact info:', { email, phone, website, twitter });
+    return { email, phone, website, twitter };
+
+  } catch (error) {
+    console.error('[GoGio] Error extracting contact info:', error);
+    return emptyResult;
+  }
 }
