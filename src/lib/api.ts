@@ -46,6 +46,10 @@ class ApiClient {
   private token: string | null = null;
 
   setToken(token: string) {
+    const masked = token.length > 12 
+      ? `${token.slice(0, 8)}...${token.slice(-4)}` 
+      : '[short]';
+    console.log('[ApiClient] setToken called, masked:', masked, 'length:', token.length);
     this.token = token;
   }
 
@@ -55,8 +59,11 @@ class ApiClient {
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     if (!this.token) {
+      console.error('[ApiClient] No token set when calling:', endpoint);
       throw new Error('No authentication token set');
     }
+
+    console.log('[ApiClient] Calling', endpoint, 'with token length:', this.token.length);
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
@@ -67,11 +74,15 @@ class ApiClient {
       },
     });
 
+    console.log('[ApiClient] Response status:', response.status, 'for', endpoint);
+
     if (!response.ok) {
       if (response.status === 401) {
+        console.error('[ApiClient] 401 Unauthorized for', endpoint);
         throw new Error('UNAUTHORIZED');
       }
       const error = await response.text();
+      console.error('[ApiClient] Error response:', error);
       throw new Error(error || `Request failed with status ${response.status}`);
     }
 
