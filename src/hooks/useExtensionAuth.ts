@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getToken, setToken as storeToken, clearToken as removeToken } from '@/lib/chromeStorage';
 import { apiClient, UserInfo } from '@/lib/api';
 import { startChromeOAuthFlow } from '@/lib/oauth';
+import { isContentScriptContext, startOAuthViaBridge } from '@/lib/oauthBridge';
 
 export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'error';
 
@@ -102,9 +103,19 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
     setError(null);
 
     try {
+      // Detect context and use appropriate OAuth method
+      const inContentScript = isContentScriptContext();
+      console.log('[Auth] Context detection - Content script:', inContentScript);
+      
       // Start OAuth flow and get token
-      console.log('[Auth] Calling startChromeOAuthFlow...');
-      const oauthToken = await startChromeOAuthFlow();
+      let oauthToken: string;
+      if (inContentScript) {
+        console.log('[Auth] Using OAuth bridge for content script...');
+        oauthToken = await startOAuthViaBridge();
+      } else {
+        console.log('[Auth] Calling startChromeOAuthFlow directly...');
+        oauthToken = await startChromeOAuthFlow();
+      }
       console.log('[Auth] Got token from OAuth, length:', oauthToken.length);
       
       // Validate the token with the API
