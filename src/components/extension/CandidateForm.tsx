@@ -307,8 +307,12 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           </div>
         )}
 
-        {/* Selection Dropdowns Card */}
-        <div className="gogio-card" style={{ padding: 12, marginBottom: 16 }}>
+        {/* Card 1: Job Selection */}
+        <div className="gogio-card">
+          <div className="gogio-card-title">
+            <Briefcase style={{ width: 14, height: 14 }} />
+            Job Selection
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
               <label className="gogio-label">Organization</label>
@@ -354,15 +358,17 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           </div>
         </div>
 
-        {/* Candidate Information Card */}
-        <div className="gogio-card" style={{ padding: 12 }}>
+        {/* Card 2: Candidate Information */}
+        <div className="gogio-card">
+          <div className="gogio-card-title">
+            <User style={{ width: 14, height: 14 }} />
+            Candidate Information
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {/* Name Row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
-                <label className="gogio-label">
-                  <User style={{ width: 12, height: 12 }} /> First Name *
-                </label>
+                <label className="gogio-label">First Name *</label>
                 <input
                   type="text"
                   value={firstName}
@@ -385,7 +391,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
               </div>
             </div>
 
-            {/* Contact */}
+            {/* Email */}
             <div>
               <label className="gogio-label">
                 <Mail style={{ width: 12, height: 12 }} /> Email
@@ -400,6 +406,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
               />
             </div>
 
+            {/* Phone */}
             <div>
               <label className="gogio-label">
                 <Phone style={{ width: 12, height: 12 }} /> Phone
@@ -414,6 +421,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
               />
             </div>
 
+            {/* LinkedIn URL */}
             <div>
               <label className="gogio-label">
                 <Linkedin style={{ width: 12, height: 12 }} /> LinkedIn URL
@@ -423,35 +431,6 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                 value={linkedinUrl}
                 onChange={(e) => setLinkedinUrl(e.target.value)}
                 placeholder="https://linkedin.com/in/..."
-                className="gogio-input"
-                style={{ height: 36 }}
-              />
-            </div>
-
-            {/* Current Position */}
-            <div>
-              <label className="gogio-label">
-                <Building2 style={{ width: 12, height: 12 }} /> Current Company
-              </label>
-              <input
-                type="text"
-                value={currentCompany}
-                onChange={(e) => setCurrentCompany(e.target.value)}
-                placeholder="Company Inc."
-                className="gogio-input"
-                style={{ height: 36 }}
-              />
-            </div>
-
-            <div>
-              <label className="gogio-label">
-                <Briefcase style={{ width: 12, height: 12 }} /> Current Role
-              </label>
-              <input
-                type="text"
-                value={currentRole}
-                onChange={(e) => setCurrentRole(e.target.value)}
-                placeholder="Software Engineer"
                 className="gogio-input"
                 style={{ height: 36 }}
               />
@@ -486,8 +465,17 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                 />
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Summary */}
+        {/* Card 3: Work Information */}
+        <div className="gogio-card">
+          <div className="gogio-card-title">
+            <Building2 style={{ width: 14, height: 14 }} />
+            Work Information
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Summary/Headline */}
             <div>
               <label className="gogio-label">
                 <FileText style={{ width: 12, height: 12 }} /> Headline / Summary
@@ -497,6 +485,32 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
                 placeholder="Brief professional summary..."
+                className="gogio-input"
+                style={{ height: 36 }}
+              />
+            </div>
+
+            {/* Current Company */}
+            <div>
+              <label className="gogio-label">Current Company</label>
+              <input
+                type="text"
+                value={currentCompany}
+                onChange={(e) => setCurrentCompany(e.target.value)}
+                placeholder="Company Inc."
+                className="gogio-input"
+                style={{ height: 36 }}
+              />
+            </div>
+
+            {/* Current Role */}
+            <div>
+              <label className="gogio-label">Current Role</label>
+              <input
+                type="text"
+                value={currentRole}
+                onChange={(e) => setCurrentRole(e.target.value)}
+                placeholder="Software Engineer"
                 className="gogio-input"
                 style={{ height: 36 }}
               />
@@ -516,18 +530,21 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                 style={{ height: 36 }}
               />
             </div>
-
-            {/* Notes */}
-            <div>
-              <label className="gogio-label">Notes (optional)</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add notes about this candidate..."
-                className="gogio-textarea"
-              />
-            </div>
           </div>
+        </div>
+
+        {/* Card 4: Notes */}
+        <div className="gogio-card">
+          <div className="gogio-card-title">
+            <FileText style={{ width: 14, height: 14 }} />
+            Notes
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add notes about this candidate..."
+            className="gogio-textarea"
+          />
         </div>
 
         {/* Submit Button */}
