@@ -20,17 +20,30 @@
   "permissions": [
     "storage",
     "tabs",
-    "identity"
+    "identity",
+    "scripting",
+    "activeTab"
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
+    "https://*.linkedin.com/*",
     "https://etrxjxstjfcozdjumfsj.supabase.co/*"
   ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/in/*"],
+      "matches": ["https://www.linkedin.com/*", "https://*.linkedin.com/*"],
       "js": ["linkedin-content.js"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["gio-avatar.png"],
+      "matches": ["https://www.linkedin.com/*", "https://*.linkedin.com/*"]
     }
   ]
 }

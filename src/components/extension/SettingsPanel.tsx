@@ -53,7 +53,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   };
 
   return (
-    <div className="w-[360px] max-h-[600px] overflow-y-auto bg-background animate-fade-in">
+    <div className="w-full max-w-[400px] max-h-[600px] overflow-y-auto bg-background animate-fade-in">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">
