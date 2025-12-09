@@ -4,7 +4,7 @@ import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
 import { getLinkedInUrl } from '@/lib/chromeStorage';
 import { apiClient, CandidatePayload } from '@/lib/api';
-import { extractProfileData, isLinkedInProfilePage } from '@/lib/profileExtractor';
+import { extractProfileData, extractContactInfo, isLinkedInProfilePage } from '@/lib/profileExtractor';
 import { isContentScriptContext } from '@/lib/oauthBridge';
 import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
 import { toast } from 'sonner';
@@ -62,6 +62,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   const [notes, setNotes] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingContact, setIsFetchingContact] = useState(false);
 
   // Load organizations on mount
   useEffect(() => {
@@ -391,11 +392,69 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
               </div>
             </div>
 
-            {/* Email */}
+            {/* Email with Fetch Contact button */}
             <div>
-              <label className="gogio-label">
-                <Mail style={{ width: 12, height: 12 }} /> Email
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label className="gogio-label" style={{ marginBottom: 0 }}>
+                  <Mail style={{ width: 12, height: 12 }} /> Email
+                </label>
+                {isContentScriptContext() && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsFetchingContact(true);
+                      try {
+                        const contactData = await extractContactInfo();
+                        let foundCount = 0;
+                        
+                        if (contactData.email && !email) {
+                          setEmail(contactData.email);
+                          foundCount++;
+                        }
+                        if (contactData.phone && !phone) {
+                          setPhone(contactData.phone);
+                          foundCount++;
+                        }
+                        
+                        if (foundCount > 0) {
+                          toast.success(`Found ${foundCount} contact field${foundCount > 1 ? 's' : ''}`);
+                        } else if (contactData.email || contactData.phone) {
+                          toast.info('Contact info already filled');
+                        } else {
+                          toast.warning('No contact info found on profile');
+                        }
+                      } catch (err) {
+                        toast.error('Failed to fetch contact info');
+                      } finally {
+                        setIsFetchingContact(false);
+                      }
+                    }}
+                    disabled={isFetchingContact}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '4px 8px',
+                      fontSize: 11,
+                      fontFamily: 'Inter, sans-serif',
+                      fontWeight: 500,
+                      color: '#6F3FF5',
+                      background: '#F5F0FF',
+                      border: '1px solid #E0D4FF',
+                      borderRadius: 6,
+                      cursor: isFetchingContact ? 'wait' : 'pointer',
+                      opacity: isFetchingContact ? 0.7 : 1,
+                    }}
+                  >
+                    {isFetchingContact ? (
+                      <Loader2 style={{ width: 12, height: 12, animation: 'spin 1s linear infinite' }} />
+                    ) : (
+                      <Plus style={{ width: 12, height: 12 }} />
+                    )}
+                    Fetch Contact
+                  </button>
+                )}
+              </div>
               <input
                 type="email"
                 value={email}
