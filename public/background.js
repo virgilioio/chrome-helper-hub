@@ -1,9 +1,10 @@
 // GoGio Background Service Worker
-// Handles extension icon clicks, OAuth, and coordinates between popup and content scripts
+// Handles extension icon clicks, OAuth, API proxy, and coordinates between popup and content scripts
 
 console.log('[GoGio][Background] Service worker started');
 
 const OAUTH_START_URL = 'https://app.gogio.io/chrome-oauth/start';
+const API_BASE_URL = 'https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1';
 
 // Parse token from OAuth redirect URL
 function parseTokenFromUrl(url) {
@@ -22,6 +23,54 @@ function parseTokenFromUrl(url) {
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[GoGio][Background] Received message:', message.type);
+
+  // API Proxy for content scripts (avoids CORS issues)
+  if (message.type === 'API_REQUEST') {
+    const { path, method = 'GET', body, token } = message;
+    console.log('[GoGio][Background] API_REQUEST:', method, path);
+
+    (async () => {
+      try {
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const res = await fetch(`${API_BASE_URL}/${path}`, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : undefined,
+        });
+
+        console.log('[GoGio][Background] API_REQUEST response:', res.status, 'for', path);
+
+        const text = await res.text();
+        let data = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = text;
+        }
+
+        sendResponse({
+          ok: res.ok,
+          status: res.status,
+          data,
+        });
+      } catch (error) {
+        console.error('[GoGio][Background] API_REQUEST failed:', error);
+        sendResponse({
+          ok: false,
+          status: 0,
+          error: error?.message || 'API request failed',
+        });
+      }
+    })();
+
+    return true; // Keep channel open for async response
+  }
 
   if (message.type === 'START_OAUTH') {
     console.log('[GoGio][Background] Starting OAuth flow...');
@@ -59,8 +108,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     );
     
-    // Return true to indicate we'll respond asynchronously
-    return true;
+    return true; // Keep channel open for async response
   }
 });
 
