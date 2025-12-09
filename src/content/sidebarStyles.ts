@@ -1007,13 +1007,16 @@ export const APP_STYLES = `
    Toast Notification Styles - GoGio Spec
    ======================================== */
 
-/* Toast Container - Position inside sidebar */
-#gogio-sidebar-root [data-sonner-toaster] {
+/* Toast Container - Centered inside sidebar */
+.gogio-sidebar [data-sonner-toaster] {
   position: absolute !important;
   bottom: 16px !important;
-  left: 16px !important;
-  right: 16px !important;
+  left: 50% !important;
+  right: auto !important;
   top: auto !important;
+  transform: translateX(-50%) !important;
+  width: calc(100% - 32px) !important;
+  max-width: 336px !important;
   z-index: 2147483648 !important;
   pointer-events: auto !important;
 }
