@@ -43,7 +43,15 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["gio-avatar.png", "gogio-logo.png"],
+      "resources": [
+        "gio-avatar.png",
+        "gogio-logo.png",
+        "gio-face-1.png",
+        "gio-face-2.png",
+        "gio-face-3.png",
+        "gio-face-4.png",
+        "gio-face-5.png"
+      ],
       "matches": ["https://www.linkedin.com/*", "https://*.linkedin.com/*"]
     }
   ]

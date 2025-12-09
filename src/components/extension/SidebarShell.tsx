@@ -40,11 +40,16 @@ const setSidebarCollapsed = (collapsed: boolean): Promise<void> => {
   });
 };
 
+// Helper to extract base profile URL (ignore /overlay/ paths)
+const getBaseProfileUrl = (url: string): string => {
+  return url.replace(/\/overlay\/.*$/, '');
+};
+
 export const SidebarShell: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  // Track current profile URL to trigger re-renders on navigation
-  const [profileUrl, setProfileUrl] = useState(window.location.href);
+  // Track current profile URL to trigger re-renders on navigation (ignore overlay URLs)
+  const [profileUrl, setProfileUrl] = useState(getBaseProfileUrl(window.location.href));
 
   // Load collapsed state from storage on mount
   useEffect(() => {
@@ -56,18 +61,25 @@ export const SidebarShell: React.FC = () => {
     });
   }, []);
 
-  // Listen for URL changes (SPA navigation)
+  // Listen for URL changes (SPA navigation) - ignore overlay URLs
   useEffect(() => {
     const handleUrlChange = (event: Event) => {
       const customEvent = event as CustomEvent<{ url: string }>;
       const newUrl = customEvent.detail?.url || window.location.href;
-      console.log('[GoGio][Sidebar] URL change detected in SidebarShell:', newUrl);
-      setProfileUrl(newUrl);
+      const newBaseUrl = getBaseProfileUrl(newUrl);
+      
+      // Only update if the base profile URL changed (ignore overlay modals)
+      if (newBaseUrl !== profileUrl) {
+        console.log('[GoGio][Sidebar] Profile change detected:', newBaseUrl);
+        setProfileUrl(newBaseUrl);
+      } else {
+        console.log('[GoGio][Sidebar] Ignoring overlay URL change:', newUrl);
+      }
     };
 
     window.addEventListener(URL_CHANGE_EVENT, handleUrlChange);
     return () => window.removeEventListener(URL_CHANGE_EVENT, handleUrlChange);
-  }, []);
+  }, [profileUrl]);
 
   const handleCollapse = useCallback(() => {
     console.log('[GoGio][Sidebar] Collapsing sidebar');
