@@ -1,4 +1,7 @@
 // GoGio API client for Chrome Extension
+// Uses background script proxy when in content script context to avoid CORS
+
+import { isContentScriptContext } from '@/lib/oauthBridge';
 
 const API_BASE_URL = 'https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1';
 
@@ -42,6 +45,63 @@ export interface CandidatePayload {
   notes: string;
 }
 
+interface ApiProxyResponse {
+  ok: boolean;
+  status: number;
+  data?: any;
+  error?: string;
+}
+
+/**
+ * Make an API request via the background script proxy
+ * Used in content script context to avoid CORS issues
+ */
+async function requestViaProxy<T>(
+  path: string,
+  token: string,
+  method: string = 'GET',
+  body?: any
+): Promise<T> {
+  const chromeApi = (globalThis as any).chrome;
+  
+  return new Promise((resolve, reject) => {
+    chromeApi.runtime.sendMessage(
+      {
+        type: 'API_REQUEST',
+        path,
+        method,
+        body,
+        token,
+      },
+      (response: ApiProxyResponse) => {
+        if (chromeApi.runtime.lastError) {
+          console.error('[ApiClient] Proxy error:', chromeApi.runtime.lastError);
+          reject(new Error(chromeApi.runtime.lastError.message || 'Background proxy failed'));
+          return;
+        }
+
+        if (!response) {
+          reject(new Error('No response from background API proxy'));
+          return;
+        }
+
+        console.log('[ApiClient] Proxy response:', response.status, 'ok:', response.ok);
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            reject(new Error('UNAUTHORIZED'));
+          } else {
+            reject(new Error(response.error || `Request failed with status ${response.status}`));
+          }
+          return;
+        }
+
+        resolve(response.data as T);
+      }
+    );
+  });
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -63,7 +123,19 @@ class ApiClient {
       throw new Error('No authentication token set');
     }
 
-    console.log('[ApiClient] Calling', endpoint, 'with token length:', this.token.length);
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.parse(options.body as string) : undefined;
+    
+    // Use background proxy in content script context to avoid CORS
+    if (isContentScriptContext()) {
+      console.log('[ApiClient] Using background proxy for:', endpoint);
+      // Remove leading slash for proxy path
+      const path = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+      return requestViaProxy<T>(path, this.token, method, body);
+    }
+
+    // Direct fetch for popup/extension pages
+    console.log('[ApiClient] Direct fetch for:', endpoint);
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
