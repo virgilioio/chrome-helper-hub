@@ -42,7 +42,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["gio-avatar.png"],
+      "resources": ["gio-avatar.png", "gogio-logo.png"],
       "matches": ["https://www.linkedin.com/*", "https://*.linkedin.com/*"]
     }
   ]
