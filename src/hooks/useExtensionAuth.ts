@@ -11,10 +11,12 @@ export interface UseExtensionAuthReturn {
   user: UserInfo | null;
   error: string | null;
   token: string | null;
+  oauthInProgress: boolean;
   setToken: (token: string) => Promise<boolean>;
   clearToken: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   loginWithOAuth: () => Promise<boolean>;
+  cancelOAuth: () => void;
 }
 
 export function useExtensionAuth(): UseExtensionAuthReturn {
@@ -22,6 +24,8 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
+  const [oauthInProgress, setOauthInProgress] = useState(false);
+  const [oauthCancelled, setOauthCancelled] = useState(false);
 
   const checkAuth = useCallback(async (authToken: string) => {
     try {
@@ -97,10 +101,20 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
     setError(null);
   }, []);
 
+  const cancelOAuth = useCallback(() => {
+    console.log('[Auth] OAuth cancelled by user');
+    setOauthCancelled(true);
+    setOauthInProgress(false);
+    setStatus('unauthenticated');
+    setError(null);
+  }, []);
+
   const loginWithOAuth = useCallback(async (): Promise<boolean> => {
     console.log('[Auth] Starting OAuth login flow');
-    setStatus('loading');
+    setOauthInProgress(true);
+    setOauthCancelled(false);
     setError(null);
+    // Keep current status while OAuth is in progress (don't flash error states)
 
     try {
       // Detect context and use appropriate OAuth method
@@ -116,6 +130,13 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
         console.log('[Auth] Calling startChromeOAuthFlow directly...');
         oauthToken = await startChromeOAuthFlow();
       }
+      
+      // Check if cancelled while waiting
+      if (oauthCancelled) {
+        console.log('[Auth] OAuth was cancelled, ignoring result');
+        return false;
+      }
+      
       console.log('[Auth] Got token from OAuth, length:', oauthToken.length);
       
       // Validate the token with the API
@@ -132,24 +153,46 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
       setUser(userInfo);
       setStatus('authenticated');
       setError(null);
+      setOauthInProgress(false);
       
       console.log('[Auth] OAuth login complete, authenticated');
       return true;
     } catch (err) {
+      // Check if cancelled - don't show error if user cancelled
+      if (oauthCancelled) {
+        console.log('[Auth] OAuth was cancelled, ignoring error');
+        return false;
+      }
+      
       const errorMessage = err instanceof Error ? err.message : 'Could not connect to GoGio. Please try again.';
       console.error('[Auth] OAuth login failed:', errorMessage);
       
-      // Clear any partial state
+      // Check if this is a user cancellation from the OAuth popup
+      const isCancellation = errorMessage.toLowerCase().includes('cancel') || 
+                            errorMessage.toLowerCase().includes('closed') ||
+                            errorMessage.toLowerCase().includes('user denied');
+      
+      if (isCancellation) {
+        // User cancelled - return to unauthenticated state, no error shown
+        console.log('[Auth] User cancelled OAuth, returning to unauthenticated');
+        setOauthInProgress(false);
+        setStatus('unauthenticated');
+        setError(null);
+        return false;
+      }
+      
+      // Actual error - show error state
       await removeToken();
       apiClient.clearToken();
       setTokenState(null);
       setUser(null);
+      setOauthInProgress(false);
       setStatus('error');
       setError(errorMessage);
       
       return false;
     }
-  }, []);
+  }, [oauthCancelled]);
 
   useEffect(() => {
     refreshAuth();
@@ -160,9 +203,11 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
     user,
     error,
     token,
+    oauthInProgress,
     setToken: handleSetToken,
     clearToken: handleClearToken,
     refreshAuth,
     loginWithOAuth,
+    cancelOAuth,
   };
 }

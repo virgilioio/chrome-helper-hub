@@ -33,12 +33,21 @@ export async function startOAuthViaBridge(): Promise<string> {
   console.log('[OAuth Bridge] Sending START_OAUTH message to background script');
   
   return new Promise((resolve, reject) => {
+    // OAuth can take a while - user needs to complete login in popup
+    // No timeout here - we wait for user action
+    
     chrome.runtime.sendMessage({ type: 'START_OAUTH' }, (response: OAuthResponse) => {
       // Check for runtime errors
       const lastError = chrome.runtime?.lastError;
       if (lastError) {
         console.error('[OAuth Bridge] Runtime error:', lastError.message);
-        reject(new Error(lastError.message || 'Failed to communicate with extension.'));
+        // Check if this is a user cancellation
+        const message = lastError.message || '';
+        if (message.toLowerCase().includes('cancel') || message.toLowerCase().includes('closed')) {
+          reject(new Error('User cancelled authentication.'));
+        } else {
+          reject(new Error(message || 'Failed to communicate with extension.'));
+        }
         return;
       }
 
@@ -53,7 +62,17 @@ export async function startOAuthViaBridge(): Promise<string> {
         resolve(response.token);
       } else {
         console.error('[OAuth Bridge] OAuth failed:', response.error);
-        reject(new Error(response.error || 'OAuth failed. Please try again.'));
+        // Parse error for user-friendly message
+        const errorMsg = response.error || 'OAuth failed. Please try again.';
+        
+        // Check for user cancellation patterns
+        if (errorMsg.toLowerCase().includes('cancel') || 
+            errorMsg.toLowerCase().includes('closed') ||
+            errorMsg.toLowerCase().includes('denied')) {
+          reject(new Error('User cancelled authentication.'));
+        } else {
+          reject(new Error(errorMsg));
+        }
       }
     });
   });

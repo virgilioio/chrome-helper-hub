@@ -1,8 +1,8 @@
 import React from 'react';
 
 // Inline SVG icons to work in content script context
-const LoaderIcon = () => (
-  <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const LoaderIcon = ({ size = 16 }: { size?: number }) => (
+  <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
   </svg>
 );
@@ -40,10 +40,19 @@ const LogOutIcon = () => (
   </svg>
 );
 
+const XIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </svg>
+);
+
 interface TokenSetupProps {
   onConnect: () => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
+  oauthInProgress?: boolean;
+  onCancelOAuth?: () => void;
 }
 
 // Get the avatar URL - works in both popup and content script contexts
@@ -55,12 +64,59 @@ const getAvatarUrl = (): string => {
   return '/gio-avatar-blue.png';
 };
 
-export const TokenSetup: React.FC<TokenSetupProps> = ({ onConnect, isLoading, error }) => {
+export const TokenSetup: React.FC<TokenSetupProps> = ({ 
+  onConnect, 
+  isLoading, 
+  error,
+  oauthInProgress = false,
+  onCancelOAuth 
+}) => {
   const handleConnect = async () => {
     await onConnect();
   };
 
   const avatarUrl = getAvatarUrl();
+
+  // OAuth In Progress View - shown when popup window is open
+  if (oauthInProgress) {
+    return (
+      <div className="flex flex-col items-center justify-center p-4 animate-fade-in" style={{ minHeight: '100%' }}>
+        <div style={{ width: '100%', maxWidth: '288px', margin: '0 auto', textAlign: 'center' }}>
+          {/* Animated Avatar Container */}
+          <div className="gogio-logo-container" style={{ animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>
+            <img src={avatarUrl} alt="GoGio" style={{ width: 48, height: 48, borderRadius: '50%' }} />
+          </div>
+
+          {/* Title */}
+          <h2 className="gogio-title">
+            Authenticating<span className="gogio-title-period">...</span>
+          </h2>
+
+          {/* Helper Text */}
+          <p className="gogio-description">
+            Complete the sign-in in the popup window that just opened.
+          </p>
+
+          {/* Loading indicator */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, marginBottom: 16 }}>
+            <LoaderIcon size={24} />
+          </div>
+
+          {/* Cancel Button */}
+          {onCancelOAuth && (
+            <button 
+              onClick={onCancelOAuth}
+              className="gogio-btn-secondary"
+              style={{ marginTop: 8 }}
+            >
+              <XIcon />
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Error/Retry View
   if (error) {
