@@ -96,3 +96,19 @@ export const toggleSidebar = (): void => {
  * Check if sidebar is currently mounted
  */
 export const isSidebarMounted = (): boolean => isMounted;
+
+// Event name for URL change notifications
+export const URL_CHANGE_EVENT = 'gogio-url-changed';
+
+/**
+ * Notify sidebar components that the URL has changed (for SPA navigation)
+ */
+export const notifySidebarOfUrlChange = (newUrl: string): void => {
+  if (!isMounted) return;
+  
+  console.log('[GoGio][Sidebar] Notifying of URL change:', newUrl);
+  
+  // Dispatch a custom event that sidebar components can listen for
+  const event = new CustomEvent(URL_CHANGE_EVENT, { detail: { url: newUrl } });
+  window.dispatchEvent(event);
+};

@@ -24,6 +24,12 @@ function parseTokenFromUrl(url) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[GoGio][Background] Received message:', message.type);
 
+  // Respond to PING messages (used to check if content script is alive)
+  if (message.type === 'PING') {
+    sendResponse({ ok: true });
+    return true;
+  }
+
   // API Proxy for content scripts (avoids CORS issues)
   if (message.type === 'API_REQUEST') {
     const { path, method = 'GET', body, token } = message;
@@ -123,6 +129,46 @@ function isLinkedInPage(url) {
   }
 }
 
+// Check if content script is ready by sending a PING
+async function isContentScriptReady(tabId) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+    return response?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+// Ensure content script is loaded and ready
+async function ensureContentScriptReady(tabId) {
+  // First check if it's already ready
+  const isReady = await isContentScriptReady(tabId);
+  if (isReady) {
+    console.log('[GoGio][Background] Content script already ready');
+    return true;
+  }
+
+  // Try to inject the content script
+  console.log('[GoGio][Background] Injecting content script...');
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['linkedin-content.js']
+    });
+    
+    // Wait a bit for it to initialize
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Verify it's ready now
+    const readyAfterInject = await isContentScriptReady(tabId);
+    console.log('[GoGio][Background] Content script ready after injection:', readyAfterInject);
+    return readyAfterInject;
+  } catch (error) {
+    console.error('[GoGio][Background] Failed to inject content script:', error);
+    return false;
+  }
+}
+
 // Handle extension icon click
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('[GoGio][Background] Extension icon clicked', { tabId: tab.id, url: tab.url });
@@ -131,35 +177,19 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (isLinkedInPage(tab.url)) {
     console.log('[GoGio][Background] LinkedIn page detected, toggling sidebar');
     
-    try {
-      // Send message to content script to toggle sidebar
-      const response = await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SIDEBAR' });
-      console.log('[GoGio][Background] Toggle response:', response);
-    } catch (error) {
-      console.error('[GoGio][Background] Failed to toggle sidebar:', error);
-      
-      // Content script might not be loaded, try injecting it
+    const ready = await ensureContentScriptReady(tab.id);
+    if (ready) {
       try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['linkedin-content.js']
-        });
-        
-        // Try again after injection
-        setTimeout(async () => {
-          try {
-            await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SIDEBAR' });
-          } catch (e) {
-            console.error('[GoGio][Background] Still failed after injection:', e);
-          }
-        }, 100);
-      } catch (injectError) {
-        console.error('[GoGio][Background] Failed to inject content script:', injectError);
+        const response = await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SIDEBAR' });
+        console.log('[GoGio][Background] Toggle response:', response);
+      } catch (error) {
+        console.error('[GoGio][Background] Failed to toggle sidebar:', error);
       }
+    } else {
+      console.error('[GoGio][Background] Content script not ready, cannot toggle sidebar');
     }
   }
   // For non-LinkedIn pages, the popup will be shown via default_popup
-  // We handle this by conditionally setting the popup below
 });
 
 // Dynamically set popup based on current tab
@@ -179,6 +209,30 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     updatePopupForTab(tabId, tab.url);
   }
 });
+
+// Listen for SPA navigation (LinkedIn uses History API)
+chrome.webNavigation.onHistoryStateUpdated.addListener(async (details) => {
+  // Only handle main frame navigation
+  if (details.frameId !== 0) return;
+  
+  console.log('[GoGio][Background] SPA navigation detected:', details.url);
+  
+  if (isLinkedInPage(details.url)) {
+    // Update popup state
+    await updatePopupForTab(details.tabId, details.url);
+    
+    // Notify content script of URL change so it can update autofill
+    try {
+      await chrome.tabs.sendMessage(details.tabId, { 
+        type: 'URL_CHANGED', 
+        url: details.url 
+      });
+    } catch (error) {
+      // Content script might not be ready yet, that's ok
+      console.log('[GoGio][Background] Could not notify content script of URL change');
+    }
+  }
+}, { url: [{ hostContains: 'linkedin.com' }] });
 
 // Listen for tab activation to adjust popup behavior
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
