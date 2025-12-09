@@ -14,12 +14,12 @@ export const SIDEBAR_STYLES = `
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Full Sidebar - GoGio Design Spec: 320px width */
+/* Full Sidebar - GoGio Design Spec: 368px width (15% wider) */
 .gogio-sidebar {
   position: fixed;
   top: 0;
   right: 0;
-  width: 320px;
+  width: 368px;
   height: 100vh;
   background: #FFFFFF;
   border-left: 1px solid #E7E8EE;
@@ -345,6 +345,34 @@ export const APP_STYLES = `
 /* ========================================
    Main Form View Styles
    ======================================== */
+
+/* Card Section Title */
+.gogio-card-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gogio-text-secondary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gogio-card-title svg {
+  width: 14px;
+  height: 14px;
+  color: var(--gogio-primary);
+}
+
+/* Card styling */
+.gogio-card {
+  background: #FFFFFF;
+  border: 1px solid var(--gogio-border);
+  border-radius: var(--gogio-radius-card);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--gogio-shadow-card);
+}
 
 /* Candidate Preview Card */
 .gogio-candidate-preview {
