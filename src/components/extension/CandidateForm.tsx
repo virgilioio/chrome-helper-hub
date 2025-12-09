@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
 import { getLinkedInUrl } from '@/lib/chromeStorage';
@@ -242,52 +242,44 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           <CardContent className="p-4 space-y-3">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Organization</Label>
-              <Select value={selectedOrgId} onValueChange={setSelectedOrgId} disabled={isLoadingOrgs}>
-                <SelectTrigger className="h-10 rounded-lg">
-                  <SelectValue placeholder={isLoadingOrgs ? "Loading..." : "Select organization"} />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  {organizations.map((org) => (
-                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={organizations.map((org) => ({ id: org.id, label: org.name }))}
+                value={selectedOrgId}
+                onValueChange={setSelectedOrgId}
+                placeholder="Select organization"
+                searchPlaceholder="Search organizations..."
+                emptyMessage="No organizations found"
+                disabled={isLoadingOrgs}
+                isLoading={isLoadingOrgs}
+              />
             </div>
 
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Job</Label>
-              <Select 
-                value={selectedJobId} 
-                onValueChange={setSelectedJobId} 
+              <SearchableSelect
+                options={jobs.map((job) => ({ id: job.id, label: job.title }))}
+                value={selectedJobId}
+                onValueChange={setSelectedJobId}
+                placeholder="Select job"
+                searchPlaceholder="Search jobs..."
+                emptyMessage="No jobs found"
                 disabled={!selectedOrgId || isLoadingJobs}
-              >
-                <SelectTrigger className="h-10 rounded-lg">
-                  <SelectValue placeholder={isLoadingJobs ? "Loading..." : "Select job"} />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  {jobs.map((job) => (
-                    <SelectItem key={job.id} value={job.id}>{job.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                isLoading={isLoadingJobs}
+              />
             </div>
 
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Stage</Label>
-              <Select 
-                value={selectedStageId} 
-                onValueChange={setSelectedStageId} 
+              <SearchableSelect
+                options={stages.map((stage) => ({ id: stage.id, label: stage.stage_name }))}
+                value={selectedStageId}
+                onValueChange={setSelectedStageId}
+                placeholder="Select stage"
+                searchPlaceholder="Search stages..."
+                emptyMessage="No stages found"
                 disabled={!selectedJobId || isLoadingStages}
-              >
-                <SelectTrigger className="h-10 rounded-lg">
-                  <SelectValue placeholder={isLoadingStages ? "Loading..." : "Select stage"} />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  {stages.map((stage) => (
-                    <SelectItem key={stage.id} value={stage.id}>{stage.stage_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                isLoading={isLoadingStages}
+              />
             </div>
           </CardContent>
         </Card>
