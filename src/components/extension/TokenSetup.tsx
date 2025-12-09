@@ -7,13 +7,13 @@ interface TokenSetupProps {
   error: string | null;
 }
 
-// Get the logo URL - works in both popup and content script contexts
-const getLogoUrl = (): string => {
+// Get the avatar URL - works in both popup and content script contexts
+const getAvatarUrl = (): string => {
   const chrome = (globalThis as any).chrome;
   if (chrome?.runtime?.getURL) {
-    return chrome.runtime.getURL('gogio-logo.png');
+    return chrome.runtime.getURL('gio-avatar-blue.png');
   }
-  return '/gogio-logo.png';
+  return '/gio-avatar-blue.png';
 };
 
 export const TokenSetup: React.FC<TokenSetupProps> = ({ onConnect, isLoading, error }) => {
@@ -21,7 +21,7 @@ export const TokenSetup: React.FC<TokenSetupProps> = ({ onConnect, isLoading, er
     await onConnect();
   };
 
-  const logoUrl = getLogoUrl();
+  const avatarUrl = getAvatarUrl();
 
   // Error/Retry View
   if (error) {
@@ -78,7 +78,7 @@ export const TokenSetup: React.FC<TokenSetupProps> = ({ onConnect, isLoading, er
       <div style={{ width: '100%', maxWidth: '288px', margin: '0 auto', textAlign: 'center' }}>
         {/* Logo Container - 64x64 circle with 10% purple bg */}
         <div className="gogio-logo-container">
-          <img src={logoUrl} alt="GoGio" />
+          <img src={avatarUrl} alt="GoGio" style={{ width: 48, height: 48, borderRadius: '50%' }} />
         </div>
 
         {/* Title with purple period */}
