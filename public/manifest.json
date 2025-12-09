@@ -22,7 +22,8 @@
     "tabs",
     "identity",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "webNavigation"
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",

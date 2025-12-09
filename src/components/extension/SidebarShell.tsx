@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { CandidatePanelApp } from './CandidatePanelApp';
 import { GoGioLogo } from './GoGioLogo';
 import { X } from 'lucide-react';
+import { URL_CHANGE_EVENT } from '@/content/sidebarMount';
 
 // Get the avatar URL - works in both popup and content script contexts
 const getAvatarUrl = (): string => {
@@ -43,6 +44,8 @@ const setSidebarCollapsed = (collapsed: boolean): Promise<void> => {
 export const SidebarShell: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  // Track current profile URL to trigger re-renders on navigation
+  const [profileUrl, setProfileUrl] = useState(window.location.href);
 
   // Load collapsed state from storage on mount
   useEffect(() => {
@@ -54,17 +57,30 @@ export const SidebarShell: React.FC = () => {
     });
   }, []);
 
-  const handleCollapse = () => {
+  // Listen for URL changes (SPA navigation)
+  useEffect(() => {
+    const handleUrlChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ url: string }>;
+      const newUrl = customEvent.detail?.url || window.location.href;
+      console.log('[GoGio][Sidebar] URL change detected in SidebarShell:', newUrl);
+      setProfileUrl(newUrl);
+    };
+
+    window.addEventListener(URL_CHANGE_EVENT, handleUrlChange);
+    return () => window.removeEventListener(URL_CHANGE_EVENT, handleUrlChange);
+  }, []);
+
+  const handleCollapse = useCallback(() => {
     console.log('[GoGio][Sidebar] Collapsing sidebar');
     setCollapsed(true);
     setSidebarCollapsed(true);
-  };
+  }, []);
 
-  const handleExpand = () => {
+  const handleExpand = useCallback(() => {
     console.log('[GoGio][Sidebar] Expanding sidebar');
     setCollapsed(false);
     setSidebarCollapsed(false);
-  };
+  }, []);
 
   // Don't render until we've loaded the collapsed state
   if (!isLoaded) {
@@ -91,7 +107,7 @@ export const SidebarShell: React.FC = () => {
     );
   }
 
-  // Full sidebar when expanded - GoGio Design Spec: 320px width
+  // Full sidebar when expanded
   return (
     <div className="gogio-sidebar">
       {/* Header - 48px height */}
@@ -107,9 +123,9 @@ export const SidebarShell: React.FC = () => {
         </button>
       </div>
 
-      {/* Main content */}
+      {/* Main content - key prop forces re-mount on URL change */}
       <div className="gogio-sidebar-content">
-        <CandidatePanelApp />
+        <CandidatePanelApp key={profileUrl} />
       </div>
     </div>
   );
