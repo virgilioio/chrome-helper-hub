@@ -542,13 +542,102 @@ export const APP_STYLES = `
   border-radius: 0.5rem;
 }
 
+/* GoGio Brand Color Classes */
+#gogio-sidebar-root .bg-virgilio-purple { background-color: hsl(267 89% 60%); }
+#gogio-sidebar-root .bg-virgilio-purple\/90 { background-color: hsl(267 89% 60% / 0.9); }
+#gogio-sidebar-root .text-virgilio-purple { color: hsl(267 89% 60%); }
+#gogio-sidebar-root .text-lilac-frost { color: hsl(267 84% 87%); }
+#gogio-sidebar-root .text-text-secondary { color: hsl(0 0% 40%); }
+#gogio-sidebar-root .bg-destructive-bg { background-color: hsl(0 100% 95%); }
+#gogio-sidebar-root .text-card-foreground { color: hsl(228 45% 10%); }
+
+/* Shadow utilities */
+#gogio-sidebar-root .shadow-button { box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.06); }
+
+/* Spacing utilities */
+#gogio-sidebar-root .tracking-wide { letter-spacing: 0.025em; }
+#gogio-sidebar-root .tracking-tight { letter-spacing: -0.025em; }
+#gogio-sidebar-root .leading-none { line-height: 1; }
+#gogio-sidebar-root .py-2\\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+#gogio-sidebar-root .max-w-\\[340px\\] { max-width: 340px; }
+
+/* Ring offset */
+#gogio-sidebar-root .ring-offset-background { --tw-ring-offset-color: hsl(var(--background)); }
+
+/* Virgilio Button Hover/Active States */
+#gogio-sidebar-root .hover\\:bg-virgilio-purple\\/90:hover { background-color: hsl(267 89% 60% / 0.9); }
+#gogio-sidebar-root .hover\\:-translate-y-0\\.5:hover { transform: translateY(-0.125rem); }
+#gogio-sidebar-root .hover\\:shadow-md:hover { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+#gogio-sidebar-root .active\\:scale-95:active { transform: scale(0.95); }
+#gogio-sidebar-root .active\\:shadow-sm:active { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+/* Font family */
+#gogio-sidebar-root .font-heading { font-family: 'Poppins', sans-serif; }
+
+/* Animate spin for loader */
+@keyframes gogio-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+#gogio-sidebar-root .animate-spin { animation: gogio-spin 1s linear infinite; }
+
+/* SVG sizing in buttons */
+#gogio-sidebar-root [class*="[&_svg]:size-4"] svg,
+#gogio-sidebar-root button svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+#gogio-sidebar-root [class*="[&_svg]:shrink-0"] svg {
+  flex-shrink: 0;
+}
+
 /* Button base styles */
 #gogio-sidebar-root button {
   cursor: pointer;
   border: none;
   outline: none;
   font-family: inherit;
-  transition: all 0.15s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+/* Virgilio button specific styling */
+#gogio-sidebar-root button.bg-virgilio-purple,
+#gogio-sidebar-root .virgilio-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: hsl(267 89% 60%);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+#gogio-sidebar-root button.bg-virgilio-purple:hover,
+#gogio-sidebar-root .virgilio-button:hover {
+  background-color: hsl(267 89% 55%);
+  transform: translateY(-0.125rem);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+}
+
+#gogio-sidebar-root button.bg-virgilio-purple:active,
+#gogio-sidebar-root .virgilio-button:active {
+  transform: scale(0.95);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+#gogio-sidebar-root button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 #gogio-sidebar-root button:focus-visible {

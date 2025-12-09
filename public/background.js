@@ -1,7 +1,68 @@
 // GoGio Background Service Worker
-// Handles extension icon clicks and coordinates between popup and content scripts
+// Handles extension icon clicks, OAuth, and coordinates between popup and content scripts
 
 console.log('[GoGio][Background] Service worker started');
+
+const OAUTH_START_URL = 'https://app.gogio.io/chrome-oauth/start';
+
+// Parse token from OAuth redirect URL
+function parseTokenFromUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const hash = urlObj.hash;
+    if (!hash || hash.length <= 1) return null;
+    const params = new URLSearchParams(hash.substring(1));
+    return params.get('token') || null;
+  } catch (err) {
+    console.error('[GoGio][Background] Error parsing redirect URL:', err);
+    return null;
+  }
+}
+
+// Handle messages from content scripts and popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('[GoGio][Background] Received message:', message.type);
+
+  if (message.type === 'START_OAUTH') {
+    console.log('[GoGio][Background] Starting OAuth flow...');
+    
+    chrome.identity.launchWebAuthFlow(
+      {
+        url: OAUTH_START_URL,
+        interactive: true,
+      },
+      (redirectUrl) => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          console.error('[GoGio][Background] OAuth error:', lastError.message);
+          sendResponse({ success: false, error: lastError.message || 'OAuth flow was cancelled or failed.' });
+          return;
+        }
+
+        if (!redirectUrl) {
+          console.error('[GoGio][Background] No redirect URL received');
+          sendResponse({ success: false, error: 'OAuth flow was cancelled. Please try again.' });
+          return;
+        }
+
+        console.log('[GoGio][Background] OAuth redirect received');
+        const token = parseTokenFromUrl(redirectUrl);
+        
+        if (!token) {
+          console.error('[GoGio][Background] Failed to parse token');
+          sendResponse({ success: false, error: 'No token received from GoGio. Please try again.' });
+          return;
+        }
+
+        console.log('[GoGio][Background] OAuth successful, token received');
+        sendResponse({ success: true, token });
+      }
+    );
+    
+    // Return true to indicate we'll respond asynchronously
+    return true;
+  }
+});
 
 // Check if a URL is a LinkedIn page
 function isLinkedInPage(url) {
