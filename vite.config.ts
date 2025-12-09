@@ -18,13 +18,13 @@ function buildContentScript() {
           format: "iife",
           target: "chrome100",
           minify: true,
-          // Include React and all dependencies
           external: [],
-          // Define for production React build
           define: {
             'process.env.NODE_ENV': '"production"',
           },
-          // Handle JSX
+          // JSX configuration for React
+          jsx: 'automatic',
+          jsxImportSource: 'react',
           loader: {
             '.tsx': 'tsx',
             '.ts': 'ts',
