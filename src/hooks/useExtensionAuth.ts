@@ -80,16 +80,23 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
   }, []);
 
   const loginWithOAuth = useCallback(async (): Promise<boolean> => {
+    console.log('[Auth] Starting OAuth login flow');
     setStatus('loading');
     setError(null);
 
     try {
       // Start OAuth flow and get token
+      console.log('[Auth] Calling startChromeOAuthFlow...');
       const oauthToken = await startChromeOAuthFlow();
+      console.log('[Auth] Got token from OAuth, length:', oauthToken.length);
       
       // Validate the token with the API
+      console.log('[Auth] Setting token on apiClient...');
       apiClient.setToken(oauthToken);
+      
+      console.log('[Auth] Calling getMe() to validate token...');
       const userInfo = await apiClient.getMe();
+      console.log('[Auth] getMe() succeeded, user:', userInfo.email);
       
       // Save the token and update state
       await storeToken(oauthToken);
@@ -98,9 +105,11 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
       setStatus('authenticated');
       setError(null);
       
+      console.log('[Auth] OAuth login complete, authenticated');
       return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Could not connect to GoGio. Please try again.';
+      console.error('[Auth] OAuth login failed:', errorMessage);
       
       // Clear any partial state
       await removeToken();
