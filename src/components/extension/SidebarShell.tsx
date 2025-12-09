@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { CandidatePanelApp } from './CandidatePanelApp';
 import { GoGioLogo } from './GoGioLogo';
+import { Toaster } from '@/components/ui/sonner';
 import { URL_CHANGE_EVENT } from '@/content/sidebarMount';
 
 // Get the avatar URL - works in both popup and content script contexts
@@ -40,9 +41,13 @@ const setSidebarCollapsed = (collapsed: boolean): Promise<void> => {
   });
 };
 
-// Helper to extract base profile URL (ignore /overlay/ paths)
+// Helper to extract base profile URL (ignore /overlay/ paths and normalize trailing slash)
 const getBaseProfileUrl = (url: string): string => {
-  return url.replace(/\/overlay\/.*$/, '');
+  // Remove overlay paths first
+  let base = url.replace(/\/overlay\/.*$/, '');
+  // Normalize trailing slash for consistent comparison
+  base = base.replace(/\/$/, '');
+  return base;
 };
 
 export const SidebarShell: React.FC = () => {
@@ -141,6 +146,9 @@ export const SidebarShell: React.FC = () => {
       <div className="gogio-sidebar-content">
         <CandidatePanelApp key={profileUrl} />
       </div>
+      
+      {/* Toast container - inside sidebar for proper positioning */}
+      <Toaster position="bottom-center" />
     </div>
   );
 };

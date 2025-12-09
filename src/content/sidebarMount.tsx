@@ -4,7 +4,6 @@
 import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { SidebarShell } from '@/components/extension/SidebarShell';
-import { Toaster } from '@/components/ui/sonner';
 import { injectSidebarStyles, removeSidebarStyles, injectAppStyles, removeAppStyles } from './sidebarStyles';
 
 const SIDEBAR_ROOT_ID = 'gogio-sidebar-root';
@@ -41,7 +40,6 @@ export const mountSidebar = (): void => {
   sidebarRoot.render(
     <React.StrictMode>
       <SidebarShell />
-      <Toaster position="bottom-right" />
     </React.StrictMode>
   );
 
