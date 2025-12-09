@@ -16,6 +16,37 @@ function getText(selector: string): string | null {
 }
 
 /**
+ * Parse headline for role and company as fallback
+ * Handles patterns like:
+ * - "Software Engineer at Google"
+ * - "Senior PM @ Microsoft"
+ * - "CTO | Startup Inc"
+ */
+function parseHeadlineForRoleCompany(headline: string | null): { role: string | null; company: string | null } {
+  if (!headline) return { role: null, company: null };
+
+  // Pattern: "Role at Company" (case insensitive)
+  const atMatch = headline.match(/^(.+?)\s+at\s+(.+?)(?:\s*[|·•–-]|$)/i);
+  if (atMatch) {
+    return { role: atMatch[1].trim(), company: atMatch[2].trim() };
+  }
+
+  // Pattern: "Role @ Company"
+  const atSymbolMatch = headline.match(/^(.+?)\s*@\s*(.+?)(?:\s*[|·•–-]|$)/i);
+  if (atSymbolMatch) {
+    return { role: atSymbolMatch[1].trim(), company: atSymbolMatch[2].trim() };
+  }
+
+  // Pattern: "Role | Company" or "Role · Company"
+  const separatorMatch = headline.match(/^(.+?)\s*[|·•–-]\s*(.+?)$/);
+  if (separatorMatch) {
+    return { role: separatorMatch[1].trim(), company: separatorMatch[2].trim() };
+  }
+
+  return { role: null, company: null };
+}
+
+/**
  * Extract profile data from the current LinkedIn page DOM
  * Works in both content script and sidebar context since both have access to the same DOM
  */
@@ -45,27 +76,47 @@ export function extractProfileData(): LinkedInProfileData {
   let currentRole: string | null = null;
 
   try {
-    // Try to find the experience section
+    // Try multiple ways to find the experience section
     const experienceSection = 
       document.querySelector('#experience') || 
       document.querySelector('[id^="experience"]') ||
-      document.querySelector('section[id*="experience"]');
+      document.querySelector('section[id*="experience"]') ||
+      document.querySelector('[data-section="experience"]') ||
+      // Find section that contains "Experience" heading
+      Array.from(document.querySelectorAll('section')).find(section => {
+        const heading = section.querySelector('h2, [class*="title"]');
+        return heading?.textContent?.toLowerCase().includes('experience');
+      });
 
     if (experienceSection) {
       // Get first experience item (most recent)
-      const firstExp = experienceSection.querySelector('li.artdeco-list__item') ||
-                       experienceSection.querySelector('li');
+      const firstExp = 
+        experienceSection.querySelector('li.artdeco-list__item') ||
+        experienceSection.querySelector('li[class*="artdeco"]') ||
+        experienceSection.querySelector('.pvs-entity') ||
+        experienceSection.querySelector('li');
       
       if (firstExp) {
-        // Role title is usually in a span with specific styling
-        const roleEl = firstExp.querySelector('div.display-flex.align-items-center.mr1 span[aria-hidden="true"]') ||
-                       firstExp.querySelector('span.mr1.t-bold span[aria-hidden="true"]') ||
-                       firstExp.querySelector('.t-bold span[aria-hidden="true"]');
+        // Role/title selectors - try multiple patterns
+        const roleEl = 
+          firstExp.querySelector('div.display-flex.align-items-center.mr1 span[aria-hidden="true"]') ||
+          firstExp.querySelector('span.mr1.t-bold span[aria-hidden="true"]') ||
+          firstExp.querySelector('.t-bold span[aria-hidden="true"]') ||
+          firstExp.querySelector('[data-anonymize="title"]') ||
+          firstExp.querySelector('.hoverable-link-text.t-bold span') ||
+          firstExp.querySelector('.t-bold > span') ||
+          firstExp.querySelector('span.t-bold');
+        
         currentRole = roleEl?.textContent?.trim() || null;
 
-        // Company name
-        const companyEl = firstExp.querySelector('span.t-14.t-normal span[aria-hidden="true"]') ||
-                          firstExp.querySelector('.t-14.t-normal span[aria-hidden="true"]');
+        // Company name selectors - try multiple patterns
+        const companyEl = 
+          firstExp.querySelector('span.t-14.t-normal span[aria-hidden="true"]') ||
+          firstExp.querySelector('.t-14.t-normal span[aria-hidden="true"]') ||
+          firstExp.querySelector('[data-anonymize="company-name"]') ||
+          firstExp.querySelector('.t-normal:not(.t-black--light) span[aria-hidden="true"]') ||
+          firstExp.querySelector('.hoverable-link-text:not(.t-bold) span');
+        
         if (companyEl) {
           // Company text might include " · Full-time", clean it up
           const companyText = companyEl.textContent?.trim() || '';
@@ -80,13 +131,11 @@ export function extractProfileData(): LinkedInProfileData {
   // Fallback: try to get company/role from the intro card
   if (!currentRole || !currentCompany) {
     try {
-      // The intro card sometimes shows current position
       const introSection = document.querySelector('.pv-text-details__right-panel');
       if (introSection) {
         const buttons = introSection.querySelectorAll('button');
         buttons.forEach(btn => {
           const text = btn.textContent?.trim() || '';
-          // Usually formatted as "Company Name"
           if (!currentCompany && text && !text.includes('Contact') && !text.includes('connection')) {
             currentCompany = text;
           }
@@ -94,6 +143,17 @@ export function extractProfileData(): LinkedInProfileData {
       }
     } catch (e) {
       // Silently fail
+    }
+  }
+
+  // Fallback: parse headline for role and company
+  if (!currentRole || !currentCompany) {
+    const parsed = parseHeadlineForRoleCompany(headline);
+    if (!currentRole && parsed.role) {
+      currentRole = parsed.role;
+    }
+    if (!currentCompany && parsed.company) {
+      currentCompany = parsed.company;
     }
   }
 
