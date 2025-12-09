@@ -1,8 +1,5 @@
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { GoGioLogo } from './GoGioLogo';
-import { Loader2, AlertTriangle, LogIn } from 'lucide-react';
+import { Loader2, AlertTriangle, LogIn, RefreshCw, LogOut } from 'lucide-react';
 
 interface TokenSetupProps {
   onConnect: () => Promise<boolean>;
@@ -10,57 +7,114 @@ interface TokenSetupProps {
   error: string | null;
 }
 
+// Get the logo URL - works in both popup and content script contexts
+const getLogoUrl = (): string => {
+  const chrome = (globalThis as any).chrome;
+  if (chrome?.runtime?.getURL) {
+    return chrome.runtime.getURL('gogio-logo.png');
+  }
+  return '/gogio-logo.png';
+};
+
 export const TokenSetup: React.FC<TokenSetupProps> = ({ onConnect, isLoading, error }) => {
   const handleConnect = async () => {
     await onConnect();
   };
 
-  return (
-    <div className="flex flex-col items-center justify-center p-4 animate-fade-in">
-      <Card className="w-full max-w-[340px]">
-        <CardHeader className="text-center pb-2">
-          <div className="flex justify-center mb-3">
-            <GoGioLogo size="lg" />
-          </div>
-          <CardTitle>
-            Connect to GoGio<span className="text-lilac-frost">.</span>
-          </CardTitle>
-          <CardDescription>
-            Sign in to your GoGio account to start adding candidates directly from LinkedIn.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <div className="flex items-center gap-2 text-sm text-destructive bg-destructive-bg px-3 py-2.5 rounded-lg">
-              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+  const logoUrl = getLogoUrl();
 
-          <Button
+  // Error/Retry View
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center p-4 animate-fade-in" style={{ minHeight: '100%' }}>
+        <div style={{ width: '100%', maxWidth: '288px', margin: '0 auto', textAlign: 'center' }}>
+          {/* Error Icon Container */}
+          <div className="gogio-error-icon-container">
+            <AlertTriangle style={{ width: 32, height: 32, color: '#FA5252' }} />
+          </div>
+
+          {/* Title with purple period */}
+          <h2 className="gogio-title">
+            Connection Failed<span className="gogio-title-period">.</span>
+          </h2>
+
+          {/* Error Description */}
+          <p className="gogio-description" style={{ marginTop: 8 }}>
+            {error}
+          </p>
+
+          {/* Try Again Button */}
+          <button
             onClick={handleConnect}
-            variant="virgilio"
-            className="w-full tracking-wide"
+            className="gogio-btn-connect"
             disabled={isLoading}
           >
             {isLoading ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="animate-spin" style={{ width: 16, height: 16 }} />
                 Connecting...
               </>
             ) : (
               <>
-                <LogIn className="h-4 w-4" />
-                Connect with GoGio
+                <RefreshCw style={{ width: 16, height: 16 }} />
+                Try Again
               </>
             )}
-          </Button>
+          </button>
 
-          <p className="text-xs text-center text-text-secondary">
-            You'll be redirected to sign in to your GoGio account.
-          </p>
-        </CardContent>
-      </Card>
+          {/* Log Out Button */}
+          <button className="gogio-btn-secondary" style={{ marginTop: 8 }}>
+            <LogOut style={{ width: 14, height: 14 }} />
+            Log Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Connect View
+  return (
+    <div className="flex flex-col items-center justify-center p-4 animate-fade-in" style={{ minHeight: '100%' }}>
+      <div style={{ width: '100%', maxWidth: '288px', margin: '0 auto', textAlign: 'center' }}>
+        {/* Logo Container - 64x64 circle with 10% purple bg */}
+        <div className="gogio-logo-container">
+          <img src={logoUrl} alt="GoGio" />
+        </div>
+
+        {/* Title with purple period */}
+        <h2 className="gogio-title">
+          Connect to GoGio<span className="gogio-title-period">.</span>
+        </h2>
+
+        {/* Description */}
+        <p className="gogio-description">
+          Sign in to your GoGio account to start adding candidates directly from LinkedIn.
+        </p>
+
+        {/* Connect Button - Lilac Frost */}
+        <button
+          onClick={handleConnect}
+          className="gogio-btn-connect"
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="animate-spin" style={{ width: 16, height: 16 }} />
+              Connecting...
+            </>
+          ) : (
+            <>
+              <LogIn style={{ width: 16, height: 16 }} />
+              Connect with GoGio
+            </>
+          )}
+        </button>
+
+        {/* Link Text */}
+        <p className="gogio-link-text">
+          Need an account? <a href="https://gogio.io" target="_blank" rel="noopener noreferrer">Sign up at gogio.io</a>
+        </p>
+      </div>
     </div>
   );
 };

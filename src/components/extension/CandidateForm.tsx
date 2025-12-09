@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { SidebarSearchableSelect } from './SidebarSearchableSelect';
 import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
 import { getLinkedInUrl } from '@/lib/chromeStorage';
-import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
 import { apiClient, CandidatePayload } from '@/lib/api';
+import { extractProfileData, isLinkedInProfilePage } from '@/lib/profileExtractor';
+import { isContentScriptContext } from '@/lib/oauthBridge';
+import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
 import { toast } from 'sonner';
 import { 
   Loader2, 
@@ -24,7 +21,8 @@ import {
   MapPin, 
   Globe, 
   FileText, 
-  Tag 
+  Tag,
+  Plus
 } from 'lucide-react';
 
 interface CandidateFormProps {
@@ -81,73 +79,94 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     prefillLinkedIn();
   }, []);
 
-  // Auto-fill from LinkedIn profile content script
+  // Auto-fill from LinkedIn profile
   useEffect(() => {
     const fetchLinkedInData = () => {
-      // First check if we're on a LinkedIn profile page
-      getActiveTabUrl((url) => {
-        if (!url?.includes('linkedin.com/in/')) {
-          return;
+      // Check if we're in content script context (sidebar on LinkedIn)
+      if (isContentScriptContext()) {
+        // We're in the sidebar - directly extract from DOM
+        if (isLinkedInProfilePage()) {
+          console.log('[GoGio] Sidebar context - extracting profile data directly');
+          const data = extractProfileData();
+          applyProfileData(data);
         }
+      } else {
+        // We're in popup - use message passing
+        getActiveTabUrl((url) => {
+          if (!url?.includes('linkedin.com/in/')) {
+            return;
+          }
 
-        // Request profile data from content script
-        sendMessageToActiveTab<{
-          fullName: string | null;
-          headline: string | null;
-          location: string | null;
-          currentCompany: string | null;
-          currentRole: string | null;
-          profileUrl: string;
-        }>(
-          { type: 'GET_LINKEDIN_PROFILE_DATA' },
-          (response) => {
-            if (!response) {
-              return;
-            }
-
-            const { fullName, headline, location, profileUrl } = response;
-
-            // Only fill empty fields (non-destructive)
-            if (fullName && !firstName && !lastName) {
-              const parts = fullName.split(' ');
-              setFirstName(parts[0] || '');
-              setLastName(parts.slice(1).join(' ') || '');
-            }
-
-            if (response.currentRole && !currentRole) {
-              setCurrentRole(response.currentRole);
-            }
-
-            if (response.currentCompany && !currentCompany) {
-              setCurrentCompany(response.currentCompany);
-            }
-
-            if (headline && !summary) {
-              setSummary(headline);
-            }
-
-            if (location) {
-              // Try to split "City, Country" format
-              const parts = location.split(',').map((p: string) => p.trim());
-              if (parts.length >= 2 && !city && !country) {
-                setCity(parts[0]);
-                setCountry(parts.slice(1).join(', '));
-              } else if (parts.length === 1 && !city) {
-                setCity(parts[0]);
+          sendMessageToActiveTab<{
+            fullName: string | null;
+            headline: string | null;
+            location: string | null;
+            currentCompany: string | null;
+            currentRole: string | null;
+            profileUrl: string;
+          }>(
+            { type: 'GET_LINKEDIN_PROFILE_DATA' },
+            (response) => {
+              if (response) {
+                applyProfileData(response);
               }
             }
-
-            if (profileUrl && !linkedinUrl) {
-              setLinkedinUrl(profileUrl);
-            }
-
-            console.log('[GoGio] Auto-filled form from LinkedIn profile');
-          }
-        );
-      });
+          );
+        });
+      }
     };
 
-    // Small delay to ensure content script is loaded
+    // Apply profile data to form (only fills empty fields)
+    const applyProfileData = (data: {
+      fullName: string | null;
+      headline: string | null;
+      location: string | null;
+      currentCompany: string | null;
+      currentRole: string | null;
+      profileUrl: string;
+    }) => {
+      if (!data) return;
+
+      const { fullName, headline, location, profileUrl } = data;
+
+      // Only fill empty fields (non-destructive)
+      if (fullName && !firstName && !lastName) {
+        const parts = fullName.split(' ');
+        setFirstName(parts[0] || '');
+        setLastName(parts.slice(1).join(' ') || '');
+      }
+
+      if (data.currentRole && !currentRole) {
+        setCurrentRole(data.currentRole);
+      }
+
+      if (data.currentCompany && !currentCompany) {
+        setCurrentCompany(data.currentCompany);
+      }
+
+      if (headline && !summary) {
+        setSummary(headline);
+      }
+
+      if (location) {
+        // Try to split "City, Country" format
+        const parts = location.split(',').map((p: string) => p.trim());
+        if (parts.length >= 2 && !city && !country) {
+          setCity(parts[0]);
+          setCountry(parts.slice(1).join(', '));
+        } else if (parts.length === 1 && !city) {
+          setCity(parts[0]);
+        }
+      }
+
+      if (profileUrl && !linkedinUrl) {
+        setLinkedinUrl(profileUrl);
+      }
+
+      console.log('[GoGio] Auto-filled form from LinkedIn profile');
+    };
+
+    // Small delay to ensure DOM is ready
     const timer = setTimeout(fetchLinkedInData, 300);
     return () => clearTimeout(timer);
   }, []); // Run once on mount
@@ -202,7 +221,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     try {
       await apiClient.submitCandidate(payload);
       toast.success('Candidate added to GoGio!', {
-        icon: <CheckCircle2 className="h-4 w-4 text-success" />,
+        icon: <CheckCircle2 className="h-4 w-4" style={{ color: '#12B886' }} />,
       });
       resetForm();
     } catch (err) {
@@ -214,35 +233,86 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
 
   const isFormValid = selectedOrgId && selectedJobId && selectedStageId && firstName.trim() && lastName.trim();
 
+  // Candidate preview data
+  const hasPreviewData = firstName || lastName || currentRole || currentCompany;
+
   return (
-    <div className="w-[360px] max-h-[600px] overflow-y-auto bg-background animate-fade-in">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-background border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
-          <GoGioLogo size="sm" />
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-              {userEmail}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onSettingsClick}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+    <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Sticky Header showing connection status */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: '1px solid #E7E8EE',
+        background: '#FFFFFF',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0,
+      }}>
+        <span style={{
+          fontFamily: 'Inter, sans-serif',
+          fontSize: '12px',
+          color: '#5A6072',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          maxWidth: '200px',
+        }}>
+          {userEmail}
+        </span>
+        <button
+          onClick={onSettingsClick}
+          style={{
+            width: 32,
+            height: 32,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 6,
+            cursor: 'pointer',
+            color: '#5A6072',
+          }}
+        >
+          <Settings style={{ width: 16, height: 16 }} />
+        </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 space-y-4">
-        {/* Selection Dropdowns */}
-        <Card className="shadow-card rounded-card">
-          <CardContent className="p-4 space-y-3">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Organization</Label>
-              <SearchableSelect
+      {/* Scrollable Form Content */}
+      <form 
+        onSubmit={handleSubmit} 
+        style={{ 
+          flex: 1, 
+          overflowY: 'auto', 
+          padding: 16,
+        }}
+      >
+        {/* Candidate Preview Card */}
+        {hasPreviewData && (
+          <div className="gogio-candidate-preview" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="gogio-candidate-avatar">
+              <User style={{ width: 20, height: 20, color: '#6F3FF5' }} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="gogio-candidate-name">
+                {firstName} {lastName}
+              </div>
+              {currentRole && (
+                <div className="gogio-candidate-title">{currentRole}</div>
+              )}
+              {currentCompany && (
+                <div className="gogio-candidate-company">@ {currentCompany}</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Selection Dropdowns Card */}
+        <div className="gogio-card" style={{ padding: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label className="gogio-label">Organization</label>
+              <SidebarSearchableSelect
                 options={organizations.map((org) => ({ id: org.id, label: org.name }))}
                 value={selectedOrgId}
                 onValueChange={setSelectedOrgId}
@@ -254,9 +324,9 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Job</Label>
-              <SearchableSelect
+            <div>
+              <label className="gogio-label">Job</label>
+              <SidebarSearchableSelect
                 options={jobs.map((job) => ({ id: job.id, label: job.title }))}
                 value={selectedJobId}
                 onValueChange={setSelectedJobId}
@@ -268,9 +338,9 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Stage</Label>
-              <SearchableSelect
+            <div>
+              <label className="gogio-label">Pipeline Stage</label>
+              <SidebarSearchableSelect
                 options={stages.map((stage) => ({ id: stage.id, label: stage.stage_name }))}
                 value={selectedStageId}
                 onValueChange={setSelectedStageId}
@@ -281,181 +351,203 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                 isLoading={isLoadingStages}
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Candidate Information */}
-        <Card className="shadow-card rounded-card">
-          <CardContent className="p-4 space-y-3">
+        {/* Candidate Information Card */}
+        <div className="gogio-card" style={{ padding: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {/* Name Row */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <User className="h-3 w-3" /> First Name *
-                </Label>
-                <Input
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label className="gogio-label">
+                  <User style={{ width: 12, height: 12 }} /> First Name *
+                </label>
+                <input
+                  type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="John"
-                  className="h-9 rounded-lg text-sm"
+                  className="gogio-input"
+                  style={{ height: 36 }}
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground">Last Name *</Label>
-                <Input
+              <div>
+                <label className="gogio-label">Last Name *</label>
+                <input
+                  type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Doe"
-                  className="h-9 rounded-lg text-sm"
+                  className="gogio-input"
+                  style={{ height: 36 }}
                 />
               </div>
             </div>
 
             {/* Contact */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Mail className="h-3 w-3" /> Email
-              </Label>
-              <Input
+            <div>
+              <label className="gogio-label">
+                <Mail style={{ width: 12, height: 12 }} /> Email
+              </label>
+              <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="john@example.com"
-                className="h-9 rounded-lg text-sm"
+                className="gogio-input"
+                style={{ height: 36 }}
               />
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Phone className="h-3 w-3" /> Phone
-              </Label>
-              <Input
+            <div>
+              <label className="gogio-label">
+                <Phone style={{ width: 12, height: 12 }} /> Phone
+              </label>
+              <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+1 (555) 123-4567"
-                className="h-9 rounded-lg text-sm"
+                className="gogio-input"
+                style={{ height: 36 }}
               />
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Linkedin className="h-3 w-3" /> LinkedIn URL
-              </Label>
-              <Input
+            <div>
+              <label className="gogio-label">
+                <Linkedin style={{ width: 12, height: 12 }} /> LinkedIn URL
+              </label>
+              <input
                 type="url"
                 value={linkedinUrl}
                 onChange={(e) => setLinkedinUrl(e.target.value)}
                 placeholder="https://linkedin.com/in/..."
-                className="h-9 rounded-lg text-sm"
+                className="gogio-input"
+                style={{ height: 36 }}
               />
             </div>
 
             {/* Current Position */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Building2 className="h-3 w-3" /> Current Company
-              </Label>
-              <Input
+            <div>
+              <label className="gogio-label">
+                <Building2 style={{ width: 12, height: 12 }} /> Current Company
+              </label>
+              <input
+                type="text"
                 value={currentCompany}
                 onChange={(e) => setCurrentCompany(e.target.value)}
                 placeholder="Company Inc."
-                className="h-9 rounded-lg text-sm"
+                className="gogio-input"
+                style={{ height: 36 }}
               />
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Briefcase className="h-3 w-3" /> Current Role
-              </Label>
-              <Input
+            <div>
+              <label className="gogio-label">
+                <Briefcase style={{ width: 12, height: 12 }} /> Current Role
+              </label>
+              <input
+                type="text"
                 value={currentRole}
                 onChange={(e) => setCurrentRole(e.target.value)}
                 placeholder="Software Engineer"
-                className="h-9 rounded-lg text-sm"
+                className="gogio-input"
+                style={{ height: 36 }}
               />
             </div>
 
             {/* Location */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <MapPin className="h-3 w-3" /> City
-                </Label>
-                <Input
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label className="gogio-label">
+                  <MapPin style={{ width: 12, height: 12 }} /> City
+                </label>
+                <input
+                  type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   placeholder="San Francisco"
-                  className="h-9 rounded-lg text-sm"
+                  className="gogio-input"
+                  style={{ height: 36 }}
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Globe className="h-3 w-3" /> Country
-                </Label>
-                <Input
+              <div>
+                <label className="gogio-label">
+                  <Globe style={{ width: 12, height: 12 }} /> Country
+                </label>
+                <input
+                  type="text"
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
                   placeholder="USA"
-                  className="h-9 rounded-lg text-sm"
+                  className="gogio-input"
+                  style={{ height: 36 }}
                 />
               </div>
             </div>
 
             {/* Summary */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <FileText className="h-3 w-3" /> Headline / Summary
-              </Label>
-              <Input
+            <div>
+              <label className="gogio-label">
+                <FileText style={{ width: 12, height: 12 }} /> Headline / Summary
+              </label>
+              <input
+                type="text"
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
                 placeholder="Brief professional summary..."
-                className="h-9 rounded-lg text-sm"
+                className="gogio-input"
+                style={{ height: 36 }}
               />
             </div>
 
             {/* Skills */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Tag className="h-3 w-3" /> Skills (comma separated)
-              </Label>
-              <Input
+            <div>
+              <label className="gogio-label">
+                <Tag style={{ width: 12, height: 12 }} /> Skills (comma separated)
+              </label>
+              <input
+                type="text"
                 value={skills}
                 onChange={(e) => setSkills(e.target.value)}
                 placeholder="React, TypeScript, Node.js..."
-                className="h-9 rounded-lg text-sm"
+                className="gogio-input"
+                style={{ height: 36 }}
               />
             </div>
 
             {/* Notes */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-muted-foreground">Notes</Label>
-              <Textarea
+            <div>
+              <label className="gogio-label">Notes (optional)</label>
+              <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Additional notes about the candidate..."
-                className="min-h-[60px] rounded-lg text-sm resize-none"
+                placeholder="Add notes about this candidate..."
+                className="gogio-textarea"
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Submit Button */}
-        <Button
+        <button
           type="submit"
-          className="w-full h-11 rounded-button font-bold text-lg"
+          className="gogio-btn-primary"
           disabled={!isFormValid || isSubmitting}
         >
           {isSubmitting ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="animate-spin" style={{ width: 16, height: 16 }} />
               Adding...
             </>
           ) : (
-            'Add to GoGio'
+            <>
+              <Plus style={{ width: 16, height: 16 }} />
+              Add to GoGio
+            </>
           )}
-        </Button>
+        </button>
       </form>
     </div>
   );
