@@ -11,11 +11,22 @@ import { Card, CardContent } from '@/components/ui/card';
 type View = 'form' | 'settings';
 
 export const ExtensionPopup: React.FC = () => {
-  const { status, user, error, token, setToken, clearToken, refreshAuth } = useExtensionAuth();
+  const { status, user, error, token, setToken, clearToken, refreshAuth, loginWithOAuth } = useExtensionAuth();
   const [currentView, setCurrentView] = useState<View>('form');
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  const handleOAuthConnect = async (): Promise<boolean> => {
+    setIsConnecting(true);
+    try {
+      const result = await loginWithOAuth();
+      return result;
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   // Loading state
-  if (status === 'loading') {
+  if (status === 'loading' && !isConnecting) {
     return (
       <div className="w-[360px] h-[400px] flex flex-col items-center justify-center bg-background">
         <GoGioLogo size="lg" className="mb-4" />
@@ -30,21 +41,21 @@ export const ExtensionPopup: React.FC = () => {
     return (
       <div className="w-[360px] bg-background">
         <TokenSetup
-          onSubmit={setToken}
-          isLoading={false}
+          onConnect={handleOAuthConnect}
+          isLoading={isConnecting}
           error={null}
         />
       </div>
     );
   }
 
-  // Error state (invalid/expired token)
+  // Error state (invalid/expired token or OAuth error)
   if (status === 'error') {
     return (
       <div className="w-[360px] bg-background">
         <TokenSetup
-          onSubmit={setToken}
-          isLoading={false}
+          onConnect={handleOAuthConnect}
+          isLoading={isConnecting}
           error={error}
         />
       </div>
