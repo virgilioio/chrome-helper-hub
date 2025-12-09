@@ -1002,6 +1002,170 @@ export const APP_STYLES = `
   flex-shrink: 0;
   margin-top: 1px;
 }
+
+/* ========================================
+   Toast Notification Styles - GoGio Spec
+   ======================================== */
+
+/* Toast Container - Position inside sidebar */
+#gogio-sidebar-root [data-sonner-toaster] {
+  position: absolute !important;
+  bottom: 16px !important;
+  left: 16px !important;
+  right: 16px !important;
+  top: auto !important;
+  z-index: 2147483648 !important;
+  pointer-events: auto !important;
+}
+
+/* Toast Item Styling */
+#gogio-sidebar-root [data-sonner-toast] {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 16px 32px 16px 16px !important;
+  border-radius: 12px !important;
+  background: #FFFFFF !important;
+  border: 1px solid #E7E8EE !important;
+  box-shadow: 0 8px 24px rgba(15, 18, 34, 0.08) !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  gap: 12px !important;
+}
+
+/* Toast Title */
+#gogio-sidebar-root [data-sonner-toast] [data-title] {
+  font-family: 'Poppins', -apple-system, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  color: #0F1222 !important;
+  line-height: 1.4 !important;
+}
+
+/* Toast Description */
+#gogio-sidebar-root [data-sonner-toast] [data-description] {
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  font-size: 12px !important;
+  color: #5A6072 !important;
+  line-height: 1.4 !important;
+  margin-top: 2px !important;
+}
+
+/* Success Toast */
+#gogio-sidebar-root [data-sonner-toast][data-type="success"] {
+  border-left: 3px solid #12B886 !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast][data-type="success"] [data-icon] svg {
+  color: #12B886 !important;
+}
+
+/* Error/Destructive Toast */
+#gogio-sidebar-root [data-sonner-toast][data-type="error"] {
+  background: #FA5252 !important;
+  border: 1px solid #FA5252 !important;
+  border-left: 3px solid #C83E3E !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast][data-type="error"] [data-title] {
+  color: #FFFFFF !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast][data-type="error"] [data-description] {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast][data-type="error"] [data-icon] svg {
+  color: #FFFFFF !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast][data-type="error"] [data-close-button] {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast][data-type="error"] [data-close-button]:hover {
+  color: #FFFFFF !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Warning Toast */
+#gogio-sidebar-root [data-sonner-toast][data-type="warning"] {
+  border-left: 3px solid #F59E0B !important;
+}
+
+/* Info Toast */
+#gogio-sidebar-root [data-sonner-toast][data-type="info"] {
+  border-left: 3px solid #6F3FF5 !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast][data-type="info"] [data-icon] svg {
+  color: #6F3FF5 !important;
+}
+
+/* Close Button */
+#gogio-sidebar-root [data-sonner-toast] [data-close-button] {
+  position: absolute !important;
+  right: 8px !important;
+  top: 8px !important;
+  width: 20px !important;
+  height: 20px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  color: #5A6072 !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast]:hover [data-close-button] {
+  opacity: 1 !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast] [data-close-button]:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #0F1222 !important;
+}
+
+/* Toast Icon */
+#gogio-sidebar-root [data-sonner-toast] [data-icon] {
+  width: 20px !important;
+  height: 20px !important;
+  flex-shrink: 0 !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast] [data-icon] svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Toast Action Button */
+#gogio-sidebar-root [data-sonner-toast] [data-button] {
+  height: 32px !important;
+  padding: 0 12px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  font-family: 'Inter', sans-serif !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  border: 1px solid #E7E8EE !important;
+  color: #0F1222 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+#gogio-sidebar-root [data-sonner-toast] [data-button]:hover {
+  background: #F8F9FA !important;
+  border-color: #D1D5DB !important;
+}
+
+/* Toast Content Layout */
+#gogio-sidebar-root [data-sonner-toast] [data-content] {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
 `;
 
 export const injectAppStyles = (): HTMLStyleElement | null => {
