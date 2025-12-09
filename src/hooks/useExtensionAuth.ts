@@ -46,6 +46,7 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
 
   const refreshAuth = useCallback(async () => {
     setStatus('loading');
+    setError(null); // Clear any previous error on refresh
     const storedToken = await getToken();
     
     if (!storedToken) {
@@ -54,9 +55,25 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
       return;
     }
 
-    setTokenState(storedToken);
-    await checkAuth(storedToken);
-  }, [checkAuth]);
+    // Try to validate the stored token silently
+    try {
+      apiClient.setToken(storedToken);
+      const userInfo = await apiClient.getMe();
+      setUser(userInfo);
+      setTokenState(storedToken);
+      setStatus('authenticated');
+      setError(null);
+    } catch (err) {
+      // Token is invalid/expired - silently clear it and show unauthenticated state
+      // NO error message shown - user hasn't explicitly tried to connect yet
+      console.log('[Auth] Stored token invalid, clearing silently');
+      await removeToken();
+      apiClient.clearToken();
+      setTokenState(null);
+      setUser(null);
+      setStatus('unauthenticated'); // NOT 'error' - keeps UI neutral
+    }
+  }, []);
 
   const handleSetToken = useCallback(async (newToken: string): Promise<boolean> => {
     setStatus('loading');
