@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
 import { getLinkedInUrl } from '@/lib/chromeStorage';
+import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
 import { apiClient, CandidatePayload } from '@/lib/api';
 import { toast } from 'sonner';
 import { 
@@ -79,6 +80,77 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     };
     prefillLinkedIn();
   }, []);
+
+  // Auto-fill from LinkedIn profile content script
+  useEffect(() => {
+    const fetchLinkedInData = () => {
+      // First check if we're on a LinkedIn profile page
+      getActiveTabUrl((url) => {
+        if (!url?.includes('linkedin.com/in/')) {
+          return;
+        }
+
+        // Request profile data from content script
+        sendMessageToActiveTab<{
+          fullName: string | null;
+          headline: string | null;
+          location: string | null;
+          currentCompany: string | null;
+          currentRole: string | null;
+          profileUrl: string;
+        }>(
+          { type: 'GET_LINKEDIN_PROFILE_DATA' },
+          (response) => {
+            if (!response) {
+              return;
+            }
+
+            const { fullName, headline, location, profileUrl } = response;
+
+            // Only fill empty fields (non-destructive)
+            if (fullName && !firstName && !lastName) {
+              const parts = fullName.split(' ');
+              setFirstName(parts[0] || '');
+              setLastName(parts.slice(1).join(' ') || '');
+            }
+
+            if (response.currentRole && !currentRole) {
+              setCurrentRole(response.currentRole);
+            }
+
+            if (response.currentCompany && !currentCompany) {
+              setCurrentCompany(response.currentCompany);
+            }
+
+            if (headline && !summary) {
+              setSummary(headline);
+            }
+
+            if (location) {
+              // Try to split "City, Country" format
+              const parts = location.split(',').map((p: string) => p.trim());
+              if (parts.length >= 2 && !city && !country) {
+                setCity(parts[0]);
+                setCountry(parts.slice(1).join(', '));
+              } else if (parts.length === 1 && !city) {
+                setCity(parts[0]);
+              }
+            }
+
+            if (profileUrl && !linkedinUrl) {
+              setLinkedinUrl(profileUrl);
+            }
+
+            console.log('[GoGio] Auto-filled form from LinkedIn profile');
+          }
+        );
+      });
+    };
+
+    // Small delay to ensure content script is loaded
+    const timer = setTimeout(fetchLinkedInData, 300);
+    return () => clearTimeout(timer);
+  }, []); // Run once on mount
 
   const resetForm = () => {
     setFirstName('');
