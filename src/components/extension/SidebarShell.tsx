@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { CandidatePanelApp } from './CandidatePanelApp';
 import { GoGioLogo } from './GoGioLogo';
-import { X } from 'lucide-react';
 import { URL_CHANGE_EVENT } from '@/content/sidebarMount';
 
 // Get the avatar URL - works in both popup and content script contexts
@@ -119,7 +118,10 @@ export const SidebarShell: React.FC = () => {
           title="Close sidebar"
           aria-label="Close GoGio sidebar"
         >
-          <X style={{ width: 16, height: 16 }} />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
         </button>
       </div>
 
