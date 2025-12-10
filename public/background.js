@@ -254,3 +254,102 @@ chrome.tabs.query({}, (tabs) => {
     }
   });
 });
+
+// ============================================================================
+// LinkedIn PDF Resume Detection
+// ============================================================================
+
+const LINKEDIN_HOSTS = ['www.linkedin.com', 'linkedin.com'];
+const LINKEDIN_CDN_HOSTS = ['media.licdn.com'];
+
+function isLinkedInDownloadUrl(urlString) {
+  if (!urlString) return false;
+  try {
+    const url = new URL(urlString);
+    const host = url.hostname;
+    return (
+      LINKEDIN_HOSTS.includes(host) ||
+      LINKEDIN_CDN_HOSTS.includes(host) ||
+      host.endsWith('.linkedin.com') ||
+      host.endsWith('.licdn.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isPdfFilename(filename) {
+  if (!filename) return false;
+  return filename.toLowerCase().endsWith('.pdf');
+}
+
+function isPdfMimeType(mime) {
+  if (!mime) return false;
+  return mime.toLowerCase() === 'application/pdf';
+}
+
+// Listen for completed downloads
+chrome.downloads.onChanged.addListener(async (delta) => {
+  try {
+    // Only care about completed downloads
+    if (delta.state?.current !== 'complete') return;
+
+    // Get download details
+    const [item] = await chrome.downloads.search({ id: delta.id });
+    if (!item) return;
+
+    const { id, filename, mime, url, referrer, tabId } = item;
+
+    // Only care about PDFs
+    if (!isPdfFilename(filename) && !isPdfMimeType(mime)) {
+      return;
+    }
+
+    // Check LinkedIn origins (download URL OR referrer)
+    let isLinkedin = isLinkedInDownloadUrl(url) || isLinkedInDownloadUrl(referrer);
+
+    // Also check the tab URL if we have a tabId
+    let finalTabId = tabId;
+    if (!isLinkedin && typeof tabId === 'number' && tabId > 0) {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (tab?.url && isLinkedInDownloadUrl(tab.url)) {
+          isLinkedin = true;
+        }
+      } catch {
+        // Tab might be closed, ignore
+      }
+    }
+
+    if (!isLinkedin) {
+      console.log('[GoGio][Downloads] Ignoring non-LinkedIn PDF:', filename);
+      return;
+    }
+
+    // LinkedIn PDF detected!
+    console.log('[GoGio][Downloads] LinkedIn PDF detected:', {
+      id,
+      filename,
+      url,
+      referrer,
+      tabId: finalTabId,
+    });
+
+    // Notify the content script on the originating tab
+    if (typeof finalTabId === 'number' && finalTabId > 0) {
+      try {
+        await chrome.tabs.sendMessage(finalTabId, {
+          type: 'LINKEDIN_RESUME_DOWNLOADED',
+          downloadId: id,
+          filename,
+          url,
+        });
+        console.log('[GoGio][Downloads] Notified content script of resume download');
+      } catch (error) {
+        console.log('[GoGio][Downloads] Could not notify content script:', error.message);
+      }
+    }
+  } catch (error) {
+    console.error('[GoGio][Downloads] Error handling download:', error);
+  }
+});

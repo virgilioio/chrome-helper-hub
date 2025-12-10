@@ -3,6 +3,7 @@ import { CandidatePanelApp } from './CandidatePanelApp';
 import { GoGioLogo } from './GoGioLogo';
 import { Toaster } from '@/components/ui/sonner';
 import { URL_CHANGE_EVENT } from '@/content/sidebarMount';
+import { useLinkedInResumeDetection } from '@/hooks/useLinkedInResumeDetection';
 
 // Get the avatar URL - works in both popup and content script contexts
 const getAvatarUrl = (): string => {
@@ -55,6 +56,17 @@ export const SidebarShell: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   // Track current profile URL to trigger re-renders on navigation (ignore overlay URLs)
   const [profileUrl, setProfileUrl] = useState(getBaseProfileUrl(window.location.href));
+  
+  // LinkedIn resume detection hook
+  const { resume: pendingResume, hasPendingResume, clearPendingResume } = useLinkedInResumeDetection();
+
+  // Log when a resume is detected (UI integration will come later)
+  useEffect(() => {
+    if (pendingResume) {
+      console.log('[GoGio][UI] Pending LinkedIn resume detected:', pendingResume);
+      // Future: Show toast or banner like "LinkedIn PDF downloaded - Attach to candidate?"
+    }
+  }, [pendingResume]);
 
   // Load collapsed state from storage on mount
   useEffect(() => {

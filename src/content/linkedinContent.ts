@@ -69,6 +69,35 @@ getChromeRuntime()?.onMessage?.addListener((msg: any, _sender: any, sendResponse
     return true;
   }
 
+  // Handle LinkedIn resume PDF download notification (from background)
+  if (msg?.type === 'LINKEDIN_RESUME_DOWNLOADED') {
+    console.log('[GoGio][Sidebar] LinkedIn resume PDF downloaded:', {
+      filename: msg.filename,
+      url: msg.url,
+      downloadId: msg.downloadId,
+    });
+
+    // Store pending resume metadata in chrome.storage.local
+    // so the sidebar React app can read it and show UI
+    const chromeApi = (globalThis as any).chrome;
+    chromeApi?.storage?.local?.set(
+      {
+        gogio_last_linkedin_resume: {
+          filename: msg.filename,
+          url: msg.url,
+          downloadId: msg.downloadId,
+          downloadedAt: Date.now(),
+        },
+      },
+      () => {
+        console.log('[GoGio][Sidebar] Stored pending resume metadata in storage');
+      }
+    );
+
+    sendResponse({ ok: true });
+    return true;
+  }
+
   return true; // Keep channel open for async response
 });
 

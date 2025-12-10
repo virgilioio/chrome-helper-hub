@@ -23,7 +23,8 @@
     "identity",
     "scripting",
     "activeTab",
-    "webNavigation"
+    "webNavigation",
+    "downloads"
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
