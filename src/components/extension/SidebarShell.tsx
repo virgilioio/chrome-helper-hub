@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { CandidatePanelApp } from './CandidatePanelApp';
 import { GoGioLogo } from './GoGioLogo';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster, toast } from '@/components/ui/sonner';
 import { URL_CHANGE_EVENT } from '@/content/sidebarMount';
 import { useLinkedInResumeDetection } from '@/hooks/useLinkedInResumeDetection';
 
@@ -58,13 +58,20 @@ export const SidebarShell: React.FC = () => {
   const [profileUrl, setProfileUrl] = useState(getBaseProfileUrl(window.location.href));
   
   // LinkedIn resume detection hook
-  const { resume: pendingResume, hasPendingResume, clearPendingResume } = useLinkedInResumeDetection();
+  const { resume: pendingResume, hasPendingResume } = useLinkedInResumeDetection();
+  
+  // Track if we've already shown the toast for this resume
+  const lastToastedResumeId = useRef<number | null>(null);
 
-  // Log when a resume is detected (UI integration will come later)
+  // Show toast when a new resume is detected
   useEffect(() => {
-    if (pendingResume) {
+    if (pendingResume && pendingResume.downloadId !== lastToastedResumeId.current) {
       console.log('[GoGio][UI] Pending LinkedIn resume detected:', pendingResume);
-      // Future: Show toast or banner like "LinkedIn PDF downloaded - Attach to candidate?"
+      lastToastedResumeId.current = pendingResume.downloadId;
+      toast.info(`Resume detected: ${pendingResume.filename}`, {
+        description: 'Will attach when you add the candidate',
+        duration: 5000,
+      });
     }
   }, [pendingResume]);
 

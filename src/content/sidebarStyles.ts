@@ -499,6 +499,78 @@ export const APP_STYLES = `
   border-color: rgba(111, 63, 245, 0.5);
 }
 
+/* ========================================
+   Resume Banner Styles
+   ======================================== */
+.gogio-resume-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #F5F0FF 0%, #EDE4FF 100%);
+  border: 1px solid #E0D4FF;
+  border-radius: var(--gogio-radius-card);
+  box-shadow: 0 2px 8px rgba(111, 63, 245, 0.08);
+}
+
+.gogio-resume-icon {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 8px;
+  background: rgba(111, 63, 245, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gogio-primary);
+}
+
+.gogio-resume-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gogio-resume-filename {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gogio-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gogio-resume-hint {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--gogio-text-secondary);
+}
+
+.gogio-resume-dismiss {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--gogio-text-secondary);
+  transition: all 0.15s ease;
+}
+
+.gogio-resume-dismiss:hover {
+  background: rgba(111, 63, 245, 0.1);
+  color: var(--gogio-primary);
+}
+
 .gogio-textarea:focus {
   outline: none;
   border-color: var(--gogio-primary);

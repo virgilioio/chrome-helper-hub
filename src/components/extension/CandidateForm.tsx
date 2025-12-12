@@ -8,6 +8,7 @@ import { extractProfileData, extractContactInfo, isLinkedInProfilePage } from '@
 import { isContentScriptContext } from '@/lib/oauthBridge';
 import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
 import { toast } from 'sonner';
+import { useLinkedInResumeDetection } from '@/hooks/useLinkedInResumeDetection';
 import { 
   Loader2, 
   Settings, 
@@ -30,6 +31,32 @@ interface CandidateFormProps {
   onSettingsClick: () => void;
 }
 
+// Helper to read downloaded file via background script
+const readDownloadedFile = (downloadId: number): Promise<{ data: string; filename: string; size: number }> => {
+  return new Promise((resolve, reject) => {
+    const chromeApi = (globalThis as any).chrome;
+    if (!chromeApi?.runtime?.sendMessage) {
+      reject(new Error('Chrome API not available'));
+      return;
+    }
+    
+    chromeApi.runtime.sendMessage(
+      { type: 'READ_DOWNLOADED_FILE', downloadId },
+      (response: { success: boolean; data?: string; filename?: string; size?: number; error?: string }) => {
+        if (chromeApi.runtime.lastError) {
+          reject(new Error(chromeApi.runtime.lastError.message));
+          return;
+        }
+        if (!response?.success) {
+          reject(new Error(response?.error || 'Failed to read file'));
+          return;
+        }
+        resolve({ data: response.data!, filename: response.filename!, size: response.size! });
+      }
+    );
+  });
+};
+
 export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSettingsClick }) => {
   const {
     organizations,
@@ -46,6 +73,9 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     isLoadingStages,
     refreshOrganizations,
   } = useDropdownData();
+
+  // Resume detection hook
+  const { resume: pendingResume, hasPendingResume, clearPendingResume } = useLinkedInResumeDetection();
 
   // Form state
   const [firstName, setFirstName] = useState('');
@@ -220,10 +250,34 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     };
 
     try {
-      await apiClient.submitCandidate(payload);
-      toast.success('Candidate added to GoGio!', {
-        icon: <CheckCircle2 className="h-4 w-4" style={{ color: '#12B886' }} />,
-      });
+      const result = await apiClient.submitCandidate(payload);
+      
+      // Upload resume if pending
+      if (hasPendingResume && pendingResume && result.candidate_id) {
+        try {
+          const fileData = await readDownloadedFile(pendingResume.downloadId);
+          await apiClient.uploadResume({
+            candidate_id: result.candidate_id,
+            filename: pendingResume.filename,
+            file_data: fileData.data,
+          });
+          toast.success('Candidate added with resume!', {
+            icon: <CheckCircle2 className="h-4 w-4" style={{ color: '#12B886' }} />,
+          });
+          clearPendingResume();
+        } catch (resumeErr) {
+          console.error('[GoGio] Resume upload failed:', resumeErr);
+          toast.warning('Candidate added, but resume upload failed', {
+            description: resumeErr instanceof Error ? resumeErr.message : 'Unknown error',
+          });
+          clearPendingResume();
+        }
+      } else {
+        toast.success('Candidate added to GoGio!', {
+          icon: <CheckCircle2 className="h-4 w-4" style={{ color: '#12B886' }} />,
+        });
+      }
+      
       resetForm();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add candidate');
@@ -288,6 +342,37 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           padding: 16,
         }}
       >
+        {/* Resume Banner - shows when a LinkedIn PDF was downloaded */}
+        {hasPendingResume && pendingResume && (
+          <div className="gogio-resume-banner">
+            <div className="gogio-resume-icon">
+              {/* Inline SVG for FileText icon (Lucide icons don't work in content script) */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                <polyline points="14,2 14,8 20,8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <line x1="10" y1="9" x2="8" y2="9"/>
+              </svg>
+            </div>
+            <div className="gogio-resume-info">
+              <span className="gogio-resume-filename">{pendingResume.filename}</span>
+              <span className="gogio-resume-hint">Will attach when you add candidate</span>
+            </div>
+            <button 
+              type="button"
+              className="gogio-resume-dismiss"
+              onClick={clearPendingResume}
+              title="Don't attach this resume"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Candidate Preview Card */}
         {hasPreviewData && (
           <div className="gogio-candidate-preview" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
