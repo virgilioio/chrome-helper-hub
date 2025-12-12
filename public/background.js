@@ -222,12 +222,12 @@ async function ensureContentScriptReady(tabId) {
   }
 }
 
-// Handle extension icon click
+// Handle extension icon click - always fires since no default_popup
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('[GoGio][Background] Extension icon clicked', { tabId: tab.id, url: tab.url });
 
-  // If on LinkedIn, toggle the sidebar
   if (isLinkedInPage(tab.url)) {
+    // LinkedIn: toggle sidebar
     console.log('[GoGio][Background] LinkedIn page detected, toggling sidebar');
     
     const ready = await ensureContentScriptReady(tab.id);
@@ -241,25 +241,16 @@ chrome.action.onClicked.addListener(async (tab) => {
     } else {
       console.error('[GoGio][Background] Content script not ready, cannot toggle sidebar');
     }
-  }
-  // For non-LinkedIn pages, the popup will be shown via default_popup
-});
-
-// Dynamically set popup based on current tab
-async function updatePopupForTab(tabId, url) {
-  if (isLinkedInPage(url)) {
-    // No popup on LinkedIn - icon click triggers sidebar
-    await chrome.action.setPopup({ tabId, popup: '' });
   } else {
-    // Show popup on non-LinkedIn pages
-    await chrome.action.setPopup({ tabId, popup: 'index.html' });
-  }
-}
-
-// Listen for tab updates to adjust popup behavior
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url) {
-    updatePopupForTab(tabId, tab.url);
+    // Non-LinkedIn: open popup manually
+    console.log('[GoGio][Background] Non-LinkedIn page, opening popup');
+    try {
+      await chrome.action.openPopup();
+    } catch (error) {
+      // Fallback: open as new tab if openPopup fails (requires Chrome 99+)
+      console.log('[GoGio][Background] openPopup failed, opening as tab:', error.message);
+      chrome.tabs.create({ url: chrome.runtime.getURL('index.html') });
+    }
   }
 });
 
@@ -271,9 +262,6 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(async (details) => {
   console.log('[GoGio][Background] SPA navigation detected:', details.url);
   
   if (isLinkedInPage(details.url)) {
-    // Update popup state
-    await updatePopupForTab(details.tabId, details.url);
-    
     // Notify content script of URL change so it can update autofill
     try {
       await chrome.tabs.sendMessage(details.tabId, { 
@@ -286,27 +274,6 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(async (details) => {
     }
   }
 }, { url: [{ hostContains: 'linkedin.com' }] });
-
-// Listen for tab activation to adjust popup behavior
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  try {
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    if (tab.url) {
-      updatePopupForTab(activeInfo.tabId, tab.url);
-    }
-  } catch (error) {
-    console.error('[GoGio][Background] Failed to get tab:', error);
-  }
-});
-
-// Initialize popup state for existing tabs
-chrome.tabs.query({}, (tabs) => {
-  tabs.forEach((tab) => {
-    if (tab.id && tab.url) {
-      updatePopupForTab(tab.id, tab.url);
-    }
-  });
-});
 
 // ============================================================================
 // LinkedIn PDF Resume Detection
