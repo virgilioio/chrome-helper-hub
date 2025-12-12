@@ -45,6 +45,25 @@ export interface CandidatePayload {
   notes: string;
 }
 
+export interface ResumeUploadPayload {
+  candidate_id: string;
+  filename: string;
+  file_data: string; // base64-encoded PDF
+}
+
+export interface CandidateSubmitResponse {
+  candidate_id: string;
+  association_id: string;
+  was_duplicate: boolean;
+  action: 'created' | 'attached' | 'updated';
+}
+
+export interface ResumeUploadResponse {
+  success: boolean;
+  attachment_id: string;
+  file_url: string;
+}
+
 interface ApiProxyResponse {
   ok: boolean;
   status: number;
@@ -180,8 +199,15 @@ class ApiClient {
     return response.stages ?? [];
   }
 
-  async submitCandidate(payload: CandidatePayload): Promise<{ success: boolean; candidateId?: string }> {
+  async submitCandidate(payload: CandidatePayload): Promise<CandidateSubmitResponse> {
     return this.request('/chrome-api-candidates', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async uploadResume(payload: ResumeUploadPayload): Promise<ResumeUploadResponse> {
+    return this.request('/chrome-api-resume', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

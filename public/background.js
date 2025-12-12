@@ -78,6 +78,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async response
   }
 
+  // Read downloaded file and return base64 data
+  if (message.type === 'READ_DOWNLOADED_FILE') {
+    const { downloadId } = message;
+    console.log('[GoGio][Background] READ_DOWNLOADED_FILE:', downloadId);
+
+    (async () => {
+      try {
+        // Get download item details
+        const [item] = await chrome.downloads.search({ id: downloadId });
+        if (!item) {
+          sendResponse({ success: false, error: 'Download not found' });
+          return;
+        }
+
+        const { filename: filePath, filename: fullPath } = item;
+        const basename = fullPath.split(/[\\/]/).pop() || 'resume.pdf';
+
+        // Read the file using fetch with file:// URL
+        // Note: This requires the downloads permission
+        const fileUrl = `file://${filePath}`;
+        
+        try {
+          const response = await fetch(fileUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          
+          // Convert ArrayBuffer to base64
+          const uint8Array = new Uint8Array(arrayBuffer);
+          let binary = '';
+          for (let i = 0; i < uint8Array.length; i++) {
+            binary += String.fromCharCode(uint8Array[i]);
+          }
+          const base64 = btoa(binary);
+          
+          console.log('[GoGio][Background] File read successfully, size:', uint8Array.length);
+          sendResponse({ 
+            success: true, 
+            data: base64, 
+            filename: basename,
+            size: uint8Array.length 
+          });
+        } catch (fetchError) {
+          console.error('[GoGio][Background] Failed to read file via fetch:', fetchError);
+          sendResponse({ success: false, error: 'Cannot read file. File may have been moved or deleted.' });
+        }
+      } catch (error) {
+        console.error('[GoGio][Background] READ_DOWNLOADED_FILE failed:', error);
+        sendResponse({ success: false, error: error?.message || 'Failed to read file' });
+      }
+    })();
+
+    return true; // Keep channel open for async response
+  }
+
   if (message.type === 'START_OAUTH') {
     console.log('[GoGio][Background] Starting OAuth flow...');
     
