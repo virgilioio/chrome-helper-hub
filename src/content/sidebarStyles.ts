@@ -571,6 +571,77 @@ export const APP_STYLES = `
   color: var(--gogio-primary);
 }
 
+/* ========================================
+   Duplicate Candidate Banner - Info style
+   ======================================== */
+
+.gogio-duplicate-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: var(--gogio-surface-secondary);
+  border: 1px solid var(--gogio-border);
+  border-left: 3px solid var(--gogio-primary);
+  border-radius: var(--gogio-radius-card);
+  box-shadow: var(--gogio-shadow-card);
+}
+
+.gogio-duplicate-icon {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 8px;
+  background: rgba(111, 63, 245, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gogio-primary);
+}
+
+.gogio-duplicate-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gogio-duplicate-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gogio-text-primary);
+}
+
+.gogio-duplicate-message {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--gogio-text-secondary);
+}
+
+.gogio-duplicate-dismiss {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--gogio-text-secondary);
+  transition: all 0.15s ease;
+}
+
+.gogio-duplicate-dismiss:hover {
+  background: rgba(111, 63, 245, 0.1);
+  color: var(--gogio-primary);
+}
+
 .gogio-textarea:focus {
   outline: none;
   border-color: var(--gogio-primary);

@@ -93,6 +93,10 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingContact, setIsFetchingContact] = useState(false);
+  const [duplicateResult, setDuplicateResult] = useState<{
+    action: 'created' | 'attached' | 'updated';
+    candidateName: string;
+  } | null>(null);
 
   // Load organizations on mount
   useEffect(() => {
@@ -214,6 +218,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     setSummary('');
     setSkills('');
     setNotes('');
+    setDuplicateResult(null);
     // Keep linkedinUrl as user might add multiple from same profile
   };
 
@@ -252,6 +257,25 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     try {
       const result = await apiClient.submitCandidate(payload);
       
+      // Check for duplicate and set banner state
+      if (result.was_duplicate) {
+        setDuplicateResult({
+          action: result.action || 'attached',
+          candidateName: payload.candidate_name,
+        });
+      } else {
+        setDuplicateResult(null);
+      }
+      
+      // Determine toast message based on action
+      const getSuccessMessage = () => {
+        if (result.was_duplicate) {
+          if (result.action === 'attached') return 'Existing candidate added to pipeline';
+          if (result.action === 'updated') return 'Existing candidate info updated';
+        }
+        return 'Candidate added to GoGio!';
+      };
+      
       // Upload resume if pending
       if (hasPendingResume && pendingResume && result.candidate_id) {
         try {
@@ -261,24 +285,35 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
             filename: pendingResume.filename,
             file_data: fileData.data,
           });
-          toast.success('Candidate added with resume!', {
+          toast.success(result.was_duplicate ? getSuccessMessage() + ' with resume!' : 'Candidate added with resume!', {
             icon: <CheckCircle2 className="h-4 w-4" style={{ color: '#12B886' }} />,
           });
           clearPendingResume();
         } catch (resumeErr) {
           console.error('[GoGio] Resume upload failed:', resumeErr);
-          toast.warning('Candidate added, but resume upload failed', {
+          toast.warning(getSuccessMessage() + ', but resume upload failed', {
             description: resumeErr instanceof Error ? resumeErr.message : 'Unknown error',
           });
           clearPendingResume();
         }
       } else {
-        toast.success('Candidate added to GoGio!', {
+        toast.success(getSuccessMessage(), {
           icon: <CheckCircle2 className="h-4 w-4" style={{ color: '#12B886' }} />,
         });
       }
       
-      resetForm();
+      // Reset form but keep duplicate banner visible
+      setFirstName('');
+      setLastName('');
+      setEmail('');
+      setPhone('');
+      setCurrentCompany('');
+      setCurrentRole('');
+      setCity('');
+      setCountry('');
+      setSummary('');
+      setSkills('');
+      setNotes('');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add candidate');
     } finally {
@@ -342,6 +377,39 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           padding: 16,
         }}
       >
+        {/* Duplicate Candidate Banner - shows after submission when candidate already exists */}
+        {duplicateResult && (
+          <div className="gogio-duplicate-banner">
+            <div className="gogio-duplicate-icon">
+              {/* Inline SVG for UserCheck icon */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <polyline points="16 11 18 13 22 9"/>
+              </svg>
+            </div>
+            <div className="gogio-duplicate-info">
+              <span className="gogio-duplicate-title">Candidate Already Exists</span>
+              <span className="gogio-duplicate-message">
+                {duplicateResult.action === 'attached' 
+                  ? 'Added to the selected job pipeline'
+                  : 'Candidate information was updated'}
+              </span>
+            </div>
+            <button 
+              type="button"
+              className="gogio-duplicate-dismiss"
+              onClick={() => setDuplicateResult(null)}
+              title="Dismiss"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Resume Banner - shows when a LinkedIn PDF was downloaded */}
         {hasPendingResume && pendingResume && (
           <div className="gogio-resume-banner">
