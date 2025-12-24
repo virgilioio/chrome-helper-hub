@@ -91,6 +91,9 @@ getChromeRuntime()?.onMessage?.addListener((msg: any, _sender: any, sendResponse
       },
       () => {
         console.log('[GoGio][Sidebar] Stored pending resume metadata in storage');
+        
+        // Auto-mount sidebar so user sees the resume banner immediately
+        mountSidebar();
       }
     );
 
