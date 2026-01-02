@@ -51,11 +51,21 @@ export interface ResumeUploadPayload {
   file_data: string; // base64-encoded PDF
 }
 
+export interface ExistingJobInfo {
+  association_id: string;
+  job_id: string;
+  job_title: string;
+  stage_id: string | null;
+  stage_name: string;
+  candidate_url: string;
+}
+
 export interface CandidateSubmitResponse {
   candidate_id: string;
   association_id: string;
   was_duplicate: boolean;
   action: 'created' | 'attached' | 'updated';
+  existing_jobs?: ExistingJobInfo[];
 }
 
 export interface ResumeUploadResponse {

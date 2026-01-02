@@ -93,9 +93,14 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingContact, setIsFetchingContact] = useState(false);
-  const [duplicateResult, setDuplicateResult] = useState<{
+const [duplicateResult, setDuplicateResult] = useState<{
     action: 'created' | 'attached' | 'updated';
     candidateName: string;
+    existingJobs: Array<{
+      jobTitle: string;
+      stageName: string;
+      candidateUrl: string;
+    }>;
   } | null>(null);
 
   // Load organizations on mount
@@ -262,6 +267,11 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
         setDuplicateResult({
           action: result.action || 'attached',
           candidateName: payload.candidate_name,
+          existingJobs: result.existing_jobs?.map(job => ({
+            jobTitle: job.job_title,
+            stageName: job.stage_name,
+            candidateUrl: job.candidate_url,
+          })) || [],
         });
       } else {
         setDuplicateResult(null);
@@ -395,7 +405,29 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                   ? 'Added to the selected job pipeline'
                   : 'Candidate information was updated'}
               </span>
+              {duplicateResult.existingJobs.length > 0 && (
+                <span className="gogio-duplicate-job-stage">
+                  {duplicateResult.existingJobs[0].jobTitle} | {duplicateResult.existingJobs[0].stageName}
+                </span>
+              )}
             </div>
+            {duplicateResult.existingJobs.length > 0 && (
+              <button
+                type="button"
+                className="gogio-duplicate-open"
+                onClick={() => window.open(
+                  `https://app.gogio.io${duplicateResult.existingJobs[0].candidateUrl}`,
+                  '_blank'
+                )}
+                title="Open in GoGio"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </button>
+            )}
             <button 
               type="button"
               className="gogio-duplicate-dismiss"
