@@ -642,6 +642,36 @@ export const APP_STYLES = `
   color: var(--gogio-primary);
 }
 
+/* Job | Stage text in duplicate banner */
+.gogio-duplicate-job-stage {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gogio-primary);
+  margin-top: 2px;
+}
+
+/* Open in GoGio button */
+.gogio-duplicate-open {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: rgba(111, 63, 245, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--gogio-primary);
+  transition: all 0.15s ease;
+}
+
+.gogio-duplicate-open:hover {
+  background: rgba(111, 63, 245, 0.2);
+  transform: scale(1.05);
+}
+
 .gogio-textarea:focus {
   outline: none;
   border-color: var(--gogio-primary);
