@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "GoGio – LinkedIn Companion",
   "description": "Add candidates from LinkedIn into GoGio pipelines in seconds.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "action": {
     "default_title": "GoGio",
     "default_icon": {
