@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "GoGio – LinkedIn Companion",
   "description": "Add candidates from LinkedIn into GoGio pipelines in seconds.",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "action": {
     "default_title": "GoGio",
     "default_icon": {
@@ -28,7 +28,7 @@
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://*.linkedin.com/*",
-    "https://etrxjxstjfcozdjumfsj.supabase.co/*"
+    "https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/*"
   ],
   "background": {
     "service_worker": "background.js",

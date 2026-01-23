@@ -4,7 +4,7 @@
 console.log('[GoGio][Background] Service worker started');
 
 const OAUTH_START_URL = 'https://app.gogio.io/chrome-oauth/start';
-const API_BASE_URL = 'https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1';
+const GATEWAY_URL = 'https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/chrome-api-gateway';
 
 // Parse token from OAuth redirect URL
 function parseTokenFromUrl(url) {
@@ -44,7 +44,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const res = await fetch(`${API_BASE_URL}/${path}`, {
+        // path now contains the full query string like "chrome-api-gateway?action=me"
+        const res = await fetch(`${GATEWAY_URL}?${path.includes('?') ? path.split('?')[1] : path}`, {
           method,
           headers,
           body: body ? JSON.stringify(body) : undefined,
