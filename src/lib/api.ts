@@ -1,9 +1,9 @@
 // GoGio API client for Chrome Extension
-// Uses background script proxy when in content script context to avoid CORS
+// Uses unified gateway endpoint with background script proxy in content script context
 
 import { isContentScriptContext } from '@/lib/oauthBridge';
 
-const API_BASE_URL = 'https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1';
+const GATEWAY_URL = 'https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/chrome-api-gateway';
 
 export interface Organization {
   id: string;
@@ -146,27 +146,29 @@ class ApiClient {
     this.token = null;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(action: string, options: RequestInit = {}, queryParams?: Record<string, string>): Promise<T> {
     if (!this.token) {
-      console.error('[ApiClient] No token set when calling:', endpoint);
+      console.error('[ApiClient] No token set when calling:', action);
       throw new Error('No authentication token set');
     }
 
     const method = options.method || 'GET';
     const body = options.body ? JSON.parse(options.body as string) : undefined;
     
+    // Build query string with action and any additional params
+    const params = new URLSearchParams({ action, ...queryParams });
+    const endpoint = `chrome-api-gateway?${params.toString()}`;
+    
     // Use background proxy in content script context to avoid CORS
     if (isContentScriptContext()) {
-      console.log('[ApiClient] Using background proxy for:', endpoint);
-      // Remove leading slash for proxy path
-      const path = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
-      return requestViaProxy<T>(path, this.token, method, body);
+      console.log('[ApiClient] Using background proxy for:', action);
+      return requestViaProxy<T>(endpoint, this.token, method, body);
     }
 
     // Direct fetch for popup/extension pages
-    console.log('[ApiClient] Direct fetch for:', endpoint);
+    console.log('[ApiClient] Direct fetch for:', action);
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(`${GATEWAY_URL}?${params.toString()}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -175,11 +177,11 @@ class ApiClient {
       },
     });
 
-    console.log('[ApiClient] Response status:', response.status, 'for', endpoint);
+    console.log('[ApiClient] Response status:', response.status, 'for', action);
 
     if (!response.ok) {
       if (response.status === 401) {
-        console.error('[ApiClient] 401 Unauthorized for', endpoint);
+        console.error('[ApiClient] 401 Unauthorized for', action);
         throw new Error('UNAUTHORIZED');
       }
       const error = await response.text();
@@ -191,33 +193,33 @@ class ApiClient {
   }
 
   async getMe(): Promise<UserInfo> {
-    return this.request<UserInfo>('/chrome-api-me');
+    return this.request<UserInfo>('me');
   }
 
   async getOrganizations(): Promise<Organization[]> {
-    const response = await this.request<{ organizations: Organization[] }>('/chrome-api-organizations');
+    const response = await this.request<{ organizations: Organization[] }>('organizations');
     return response.organizations ?? [];
   }
 
   async getJobs(organizationId: string): Promise<Job[]> {
-    const response = await this.request<{ jobs: Job[] }>(`/chrome-api-jobs?organization_id=${organizationId}`);
+    const response = await this.request<{ jobs: Job[] }>('jobs', {}, { organization_id: organizationId });
     return response.jobs ?? [];
   }
 
   async getStages(jobId: string): Promise<Stage[]> {
-    const response = await this.request<{ stages: Stage[] }>(`/chrome-api-stages?job_id=${jobId}`);
+    const response = await this.request<{ stages: Stage[] }>('stages', {}, { job_id: jobId });
     return response.stages ?? [];
   }
 
   async submitCandidate(payload: CandidatePayload): Promise<CandidateSubmitResponse> {
-    return this.request('/chrome-api-candidates', {
+    return this.request('candidates', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
   async uploadResume(payload: ResumeUploadPayload): Promise<ResumeUploadResponse> {
-    return this.request('/chrome-api-resume', {
+    return this.request('resume', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
