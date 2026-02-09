@@ -4,7 +4,7 @@ import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
 import { getLinkedInUrl } from '@/lib/chromeStorage';
 import { apiClient, CandidatePayload } from '@/lib/api';
-import { extractProfileData, extractContactInfo, isLinkedInProfilePage } from '@/lib/profileExtractor';
+import { extractProfileData, extractProfileDataWithRetry, extractContactInfo, isLinkedInProfilePage } from '@/lib/profileExtractor';
 import { isContentScriptContext } from '@/lib/oauthBridge';
 import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
 import { toast } from 'sonner';
@@ -121,14 +121,19 @@ const [duplicateResult, setDuplicateResult] = useState<{
 
   // Auto-fill from LinkedIn profile
   useEffect(() => {
-    const fetchLinkedInData = () => {
+    let cancelled = false;
+
+    const fetchLinkedInData = async () => {
       // Check if we're in content script context (sidebar on LinkedIn)
       if (isContentScriptContext()) {
-        // We're in the sidebar - directly extract from DOM
+        // We're in the sidebar - directly extract from DOM with retry
         if (isLinkedInProfilePage()) {
-          console.log('[GoGio] Sidebar context - extracting profile data directly');
-          const data = extractProfileData();
-          applyProfileData(data);
+          console.log('[GoGio] Sidebar context - extracting profile data with retry');
+          const data = await extractProfileDataWithRetry();
+          if (!cancelled) {
+            applyProfileData(data);
+            console.log('[GoGio] Autofill complete:', { hasName: !!data.fullName, hasLocation: !!data.location });
+          }
         }
       } else {
         // We're in popup - use message passing
@@ -147,7 +152,7 @@ const [duplicateResult, setDuplicateResult] = useState<{
           }>(
             { type: 'GET_LINKEDIN_PROFILE_DATA' },
             (response) => {
-              if (response) {
+              if (response && !cancelled) {
                 applyProfileData(response);
               }
             }
@@ -206,9 +211,8 @@ const [duplicateResult, setDuplicateResult] = useState<{
       console.log('[GoGio] Auto-filled form from LinkedIn profile');
     };
 
-    // Small delay to ensure DOM is ready
-    const timer = setTimeout(fetchLinkedInData, 300);
-    return () => clearTimeout(timer);
+    fetchLinkedInData();
+    return () => { cancelled = true; };
   }, []); // Run once on mount
 
   const resetForm = () => {
