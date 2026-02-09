@@ -17,9 +17,21 @@ export interface ContactInfoData {
   twitter: string | null;
 }
 
-function getText(selector: string): string | null {
-  const el = document.querySelector(selector);
-  return el?.textContent?.trim() || null;
+function getTextFromSelectors(selectors: string[], label: string): string | null {
+  for (const selector of selectors) {
+    try {
+      const el = document.querySelector(selector);
+      const text = el?.textContent?.trim() || null;
+      if (text) {
+        console.log(`[GoGio][Extract] ${label} matched: "${selector}" → "${text.substring(0, 60)}"`);
+        return text;
+      }
+    } catch (e) {
+      // Invalid selector, skip
+    }
+  }
+  console.log(`[GoGio][Extract] ${label}: no selector matched`);
+  return null;
 }
 
 /**
@@ -58,25 +70,40 @@ function parseHeadlineForRoleCompany(headline: string | null): { role: string | 
  * Works in both content script and sidebar context since both have access to the same DOM
  */
 export function extractProfileData(): LinkedInProfileData {
-  // Try multiple selectors for name (LinkedIn changes DOM frequently)
-  const fullName =
-    getText('h1.text-heading-xlarge') ||
-    getText('h1.inline.t-24') ||
-    getText('h1') ||
-    null;
+  console.log('[GoGio][Extract] Starting profile extraction...');
 
-  // Headline - usually below name
-  const headline =
-    getText('div.text-body-medium.break-words') ||
-    getText('.pv-text-details__left-panel .text-body-medium') ||
-    getText('[data-generated-suggestion-target]') ||
-    null;
+  // Name selectors - broadest partial-match first, then structural, then exact legacy
+  const fullName = getTextFromSelectors([
+    'h1[class*="text-heading"]',
+    '.pv-top-card h1',
+    '.ph5 h1',
+    'h1.text-heading-xlarge',
+    'h1.inline.t-24',
+    '.pv-top-card--list h1',
+    'section.pv-top-card h1',
+    'h1',
+  ], 'Name');
 
-  // Location
-  const location =
-    getText('span.text-body-small.inline.t-black--light.break-words') ||
-    getText('.pv-text-details__left-panel .text-body-small.inline') ||
-    null;
+  // Headline selectors
+  const headline = getTextFromSelectors([
+    '.pv-top-card .text-body-medium',
+    '.ph5 .text-body-medium',
+    '.text-body-medium',
+    'div.text-body-medium.break-words',
+    '.pv-text-details__left-panel .text-body-medium',
+    '[data-generated-suggestion-target]',
+  ], 'Headline');
+
+  // Location selectors
+  const location = getTextFromSelectors([
+    '.pv-top-card--list-bullet .text-body-small',
+    '.pb2 .text-body-small',
+    '.pv-top-card .text-body-small',
+    '.ph5 .text-body-small',
+    'span.text-body-small.inline.t-black--light.break-words',
+    '.pv-text-details__left-panel .text-body-small.inline',
+    'span.text-body-small[class*="t-black--light"]',
+  ], 'Location');
 
   // Experience section for current role/company
   let currentCompany: string | null = null;
@@ -89,23 +116,32 @@ export function extractProfileData(): LinkedInProfileData {
       document.querySelector('[id^="experience"]') ||
       document.querySelector('section[id*="experience"]') ||
       document.querySelector('[data-section="experience"]') ||
+      document.querySelector('.pvs-list__outer-container')?.closest('section') ||
+      // Find by profilePagedListComponent pattern
+      document.querySelector('[id*="profilePagedListComponent"]')?.closest('section') ||
       // Find section that contains "Experience" heading
       Array.from(document.querySelectorAll('section')).find(section => {
-        const heading = section.querySelector('h2, [class*="title"]');
+        const heading = section.querySelector('h2, [class*="title"], span[aria-hidden="true"]');
         return heading?.textContent?.toLowerCase().includes('experience');
       });
 
     if (experienceSection) {
+      console.log('[GoGio][Extract] Found experience section');
+      
       // Get first experience item (most recent)
       const firstExp = 
+        experienceSection.querySelector('.pvs-entity--padded') ||
+        experienceSection.querySelector('.pvs-entity') ||
         experienceSection.querySelector('li.artdeco-list__item') ||
         experienceSection.querySelector('li[class*="artdeco"]') ||
-        experienceSection.querySelector('.pvs-entity') ||
         experienceSection.querySelector('li');
       
       if (firstExp) {
+        console.log('[GoGio][Extract] Found first experience entry');
+        
         // Role/title selectors - try multiple patterns
         const roleEl = 
+          firstExp.querySelector('.pvs-entity__path-node ~ div span[aria-hidden="true"]') ||
           firstExp.querySelector('div.display-flex.align-items-center.mr1 span[aria-hidden="true"]') ||
           firstExp.querySelector('span.mr1.t-bold span[aria-hidden="true"]') ||
           firstExp.querySelector('.t-bold span[aria-hidden="true"]') ||
@@ -115,11 +151,14 @@ export function extractProfileData(): LinkedInProfileData {
           firstExp.querySelector('span.t-bold');
         
         currentRole = roleEl?.textContent?.trim() || null;
+        if (currentRole) {
+          console.log('[GoGio][Extract] Role:', currentRole);
+        }
 
         // Company name selectors - try multiple patterns
         const companyEl = 
-          firstExp.querySelector('span.t-14.t-normal span[aria-hidden="true"]') ||
           firstExp.querySelector('.t-14.t-normal span[aria-hidden="true"]') ||
+          firstExp.querySelector('span.t-14.t-normal span[aria-hidden="true"]') ||
           firstExp.querySelector('[data-anonymize="company-name"]') ||
           firstExp.querySelector('.t-normal:not(.t-black--light) span[aria-hidden="true"]') ||
           firstExp.querySelector('.hoverable-link-text:not(.t-bold) span');
@@ -128,11 +167,16 @@ export function extractProfileData(): LinkedInProfileData {
           // Company text might include " · Full-time", clean it up
           const companyText = companyEl.textContent?.trim() || '';
           currentCompany = companyText.split('·')[0].trim() || null;
+          if (currentCompany) {
+            console.log('[GoGio][Extract] Company:', currentCompany);
+          }
         }
       }
+    } else {
+      console.log('[GoGio][Extract] Experience section not found');
     }
   } catch (e) {
-    // Silently fail - DOM extraction is best-effort
+    console.warn('[GoGio][Extract] Experience extraction error:', e);
   }
 
   // Fallback: try to get company/role from the intro card
@@ -158,22 +202,49 @@ export function extractProfileData(): LinkedInProfileData {
     const parsed = parseHeadlineForRoleCompany(headline);
     if (!currentRole && parsed.role) {
       currentRole = parsed.role;
+      console.log('[GoGio][Extract] Role from headline:', currentRole);
     }
     if (!currentCompany && parsed.company) {
       currentCompany = parsed.company;
+      console.log('[GoGio][Extract] Company from headline:', currentCompany);
     }
   }
 
   const profileUrl = window.location.href;
 
-  return {
-    fullName,
-    headline,
-    location,
-    currentCompany,
-    currentRole,
-    profileUrl,
-  };
+  const result = { fullName, headline, location, currentCompany, currentRole, profileUrl };
+  console.log('[GoGio][Extract] Extraction result:', {
+    hasName: !!fullName,
+    hasHeadline: !!headline,
+    hasLocation: !!location,
+    hasCompany: !!currentCompany,
+    hasRole: !!currentRole,
+  });
+
+  return result;
+}
+
+/**
+ * Extract profile data with retry logic for LinkedIn SPA rendering
+ * Attempts extraction up to 3 times with increasing delays
+ */
+export async function extractProfileDataWithRetry(): Promise<LinkedInProfileData> {
+  const delays = [500, 1500, 3000];
+
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+    
+    console.log(`[GoGio][Extract] Attempt ${attempt + 1}/${delays.length}...`);
+    const data = extractProfileData();
+    
+    if (data.fullName) {
+      console.log(`[GoGio][Extract] Success on attempt ${attempt + 1}`);
+      return data;
+    }
+  }
+
+  console.warn('[GoGio][Extract] All retry attempts exhausted, returning last result');
+  return extractProfileData();
 }
 
 /**
