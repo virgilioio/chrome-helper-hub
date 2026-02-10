@@ -2,6 +2,7 @@
 // Uses unified gateway endpoint with background script proxy in content script context
 
 import { isContentScriptContext } from '@/lib/oauthBridge';
+import { isExtensionContextValid } from '@/lib/chromeApi';
 
 const GATEWAY_URL = 'https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/chrome-api-gateway';
 
@@ -91,6 +92,11 @@ async function requestViaProxy<T>(
   method: string = 'GET',
   body?: any
 ): Promise<T> {
+  // Guard against invalidated extension context
+  if (!isExtensionContextValid()) {
+    throw new Error('Extension was updated. Please refresh this page to reconnect.');
+  }
+
   const chromeApi = (globalThis as any).chrome;
   
   return new Promise((resolve, reject) => {
