@@ -4,15 +4,11 @@ import { GoGioLogo } from './GoGioLogo';
 import { Toaster, toast } from '@/components/ui/sonner';
 import { URL_CHANGE_EVENT } from '@/content/sidebarMount';
 import { useLinkedInResumeDetection } from '@/hooks/useLinkedInResumeDetection';
+import { getSafeExtensionUrl } from '@/lib/chromeApi';
 
 // Get the avatar URL - works in both popup and content script contexts
 const getAvatarUrl = (): string => {
-  const chrome = (globalThis as any).chrome;
-  if (chrome?.runtime?.getURL) {
-    return chrome.runtime.getURL('gio-avatar.png');
-  }
-  // Fallback for development
-  return '/gio-avatar.png';
+  return getSafeExtensionUrl('gio-avatar.png') || '/gio-avatar.png';
 };
 
 // Chrome storage helpers for sidebar state

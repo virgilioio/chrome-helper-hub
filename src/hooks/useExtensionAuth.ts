@@ -3,6 +3,7 @@ import { getToken, setToken as storeToken, clearToken as removeToken } from '@/l
 import { apiClient, UserInfo } from '@/lib/api';
 import { startChromeOAuthFlow } from '@/lib/oauth';
 import { isContentScriptContext, startOAuthViaBridge } from '@/lib/oauthBridge';
+import { isExtensionContextValid } from '@/lib/chromeApi';
 
 export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'error';
 
@@ -50,6 +51,14 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
   }, []);
 
   const refreshAuth = useCallback(async () => {
+    // Check if extension context is still valid (not invalidated by update/reload)
+    if (!isExtensionContextValid()) {
+      console.warn('[Auth] Extension context invalidated - user needs to refresh page');
+      setStatus('error');
+      setError('Extension was updated. Please refresh this page to reconnect.');
+      return;
+    }
+
     setStatus('loading');
     setError(null); // Clear any previous error on refresh
     const storedToken = await getToken();
@@ -110,6 +119,13 @@ export function useExtensionAuth(): UseExtensionAuthReturn {
   }, []);
 
   const loginWithOAuth = useCallback(async (): Promise<boolean> => {
+    // Check if extension context is still valid
+    if (!isExtensionContextValid()) {
+      setStatus('error');
+      setError('Extension was updated. Please refresh this page to reconnect.');
+      return false;
+    }
+
     console.log('[Auth] Starting OAuth login flow');
     setOauthInProgress(true);
     setOauthCancelled(false);

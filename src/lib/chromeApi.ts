@@ -47,6 +47,43 @@ export const getChrome = (): ChromeAPI | null => {
 };
 
 /**
+ * Check if the extension context is still valid.
+ * After extension updates/reloads, content scripts keep running but
+ * chrome.runtime becomes invalidated - chrome.runtime.id becomes undefined
+ * and chrome.runtime.getURL returns "chrome-extension://invalid/..."
+ */
+export const isExtensionContextValid = (): boolean => {
+  try {
+    const chrome = (globalThis as any).chrome;
+    if (!chrome?.runtime) return false;
+    // chrome.runtime.id is undefined when context is invalidated
+    if (!chrome.runtime.id) return false;
+    // Double-check with getURL if available
+    if (chrome.runtime.getURL) {
+      const testUrl = chrome.runtime.getURL('test');
+      if (testUrl.includes('invalid')) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Get a safe chrome-extension:// URL for an asset.
+ * Returns empty string if extension context is invalidated.
+ */
+export const getSafeExtensionUrl = (path: string): string => {
+  try {
+    const chrome = (globalThis as any).chrome;
+    if (chrome?.runtime?.getURL && chrome.runtime.id) {
+      return chrome.runtime.getURL(path);
+    }
+  } catch {}
+  return '';
+};
+
+/**
  * Check if Chrome tabs API is available
  */
 export const isChromeTabsAvailable = (): boolean => {

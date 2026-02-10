@@ -1,5 +1,6 @@
 import React from 'react';
 import { GioFlipLoader } from './GioFlipLoader';
+import { getSafeExtensionUrl } from '@/lib/chromeApi';
 
 // Small inline loader for buttons
 const ButtonLoader = () => (
@@ -58,11 +59,7 @@ interface TokenSetupProps {
 
 // Get the avatar URL - works in both popup and content script contexts
 const getAvatarUrl = (): string => {
-  const chrome = (globalThis as any).chrome;
-  if (chrome?.runtime?.getURL) {
-    return chrome.runtime.getURL('gio-face-2.png');
-  }
-  return '/gio-face-2.png';
+  return getSafeExtensionUrl('gio-face-2.png') || '/gio-face-2.png';
 };
 
 export const TokenSetup: React.FC<TokenSetupProps> = ({ 

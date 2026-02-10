@@ -1,4 +1,5 @@
 import React from 'react';
+import { getSafeExtensionUrl } from '@/lib/chromeApi';
 
 interface GoGioLogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -8,12 +9,7 @@ interface GoGioLogoProps {
 
 // Get the logo URL - works in both popup and content script contexts
 const getLogoUrl = (): string => {
-  const chrome = (globalThis as any).chrome;
-  if (chrome?.runtime?.getURL) {
-    return chrome.runtime.getURL('gogio-logo.png');
-  }
-  // Fallback for development
-  return '/gogio-logo.png';
+  return getSafeExtensionUrl('gogio-logo.png') || '/gogio-logo.png';
 };
 
 export const GoGioLogo: React.FC<GoGioLogoProps> = ({ size = 'md', className = '', variant = 'wordmark' }) => {
