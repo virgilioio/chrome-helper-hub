@@ -1,6 +1,9 @@
 // LinkedIn Content Script - Main Entry Point
 // Combines profile data extraction with sidebar mounting
 
+import { toggleSidebar, mountSidebar, isSidebarMounted, notifySidebarOfUrlChange } from './sidebarMount';
+import { extractProfileData } from '@/lib/profileExtractor';
+
 // Duplicate-load guard: prevents double execution when both manifest injection
 // and background's ensureContentScriptReady() inject this script
 if ((window as any).__gogio_content_loaded) {
@@ -8,139 +11,132 @@ if ((window as any).__gogio_content_loaded) {
 } else {
   (window as any).__gogio_content_loaded = true;
 
-  (async () => {
-    // These imports are hoisted by the bundler, but the guard prevents
-    // side effects (listeners, overrides) from running twice
-    const { toggleSidebar, mountSidebar, isSidebarMounted, notifySidebarOfUrlChange } = await import('./sidebarMount');
-    const { extractProfileData } = await import('@/lib/profileExtractor');
+  // Track current URL for SPA navigation detection
+  let currentUrl = window.location.href;
 
-    // Track current URL for SPA navigation detection
-    let currentUrl = window.location.href;
+  // ============================================================================
+  // Message Listeners
+  // ============================================================================
 
-    // ============================================================================
-    // Message Listeners
-    // ============================================================================
+  const getChromeRuntime = () => (globalThis as any).chrome?.runtime;
 
-    const getChromeRuntime = () => (globalThis as any).chrome?.runtime;
-
-    // Listen for messages from popup or background
-    getChromeRuntime()?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (response: any) => void) => {
-      // Respond to PING messages (used by background to check if content script is alive)
-      if (msg?.type === 'PING') {
-        sendResponse({ ok: true });
-        return true;
-      }
-
-      // Handle profile data requests (from popup or sidebar)
-      if (msg?.type === 'GET_LINKEDIN_PROFILE_DATA') {
-        try {
-          const data = extractProfileData();
-          console.log('[GoGio] Profile data extracted:', {
-            hasName: !!data.fullName,
-            hasHeadline: !!data.headline,
-            hasLocation: !!data.location,
-            hasCompany: !!data.currentCompany,
-            hasRole: !!data.currentRole,
-          });
-          sendResponse(data);
-        } catch (e) {
-          console.warn('[GoGio] Failed to extract LinkedIn profile data', e);
-          sendResponse(null);
-        }
-        return true;
-      }
-
-      // Handle sidebar toggle (from background/service worker)
-      if (msg?.type === 'TOGGLE_SIDEBAR') {
-        console.log('[GoGio][Sidebar] Received TOGGLE_SIDEBAR message');
-        toggleSidebar();
-        sendResponse({ ok: true, mounted: isSidebarMounted() });
-        return true;
-      }
-
-      // Handle mount sidebar (explicit mount, don't toggle)
-      if (msg?.type === 'MOUNT_SIDEBAR') {
-        console.log('[GoGio][Sidebar] Received MOUNT_SIDEBAR message');
-        mountSidebar();
-        sendResponse({ ok: true, mounted: true });
-        return true;
-      }
-
-      // Handle URL change notification from background (SPA navigation)
-      if (msg?.type === 'URL_CHANGED') {
-        console.log('[GoGio] URL changed notification:', msg.url);
-        currentUrl = msg.url;
-        // Notify sidebar components to refresh data
-        notifySidebarOfUrlChange(msg.url);
-        sendResponse({ ok: true });
-        return true;
-      }
-
-      // Handle LinkedIn resume PDF download notification (from background)
-      if (msg?.type === 'LINKEDIN_RESUME_DOWNLOADED') {
-        console.log('[GoGio][Sidebar] LinkedIn resume PDF downloaded:', {
-          filename: msg.filename,
-          url: msg.url,
-          downloadId: msg.downloadId,
-        });
-
-        // Store pending resume metadata in chrome.storage.local
-        const chromeApi = (globalThis as any).chrome;
-        chromeApi?.storage?.local?.set(
-          {
-            gogio_last_linkedin_resume: {
-              filename: msg.filename,
-              url: msg.url,
-              downloadId: msg.downloadId,
-              downloadedAt: Date.now(),
-            },
-          },
-          () => {
-            console.log('[GoGio][Sidebar] Stored pending resume metadata in storage');
-            mountSidebar();
-          }
-        );
-
-        sendResponse({ ok: true });
-        return true;
-      }
-
-      return true; // Keep channel open for async response
-    });
-
-    // ============================================================================
-    // SPA Navigation Detection (backup for when background doesn't notify)
-    // ============================================================================
-
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
-
-    function handleUrlChange() {
-      const newUrl = window.location.href;
-      if (newUrl !== currentUrl) {
-        console.log('[GoGio] Detected URL change:', currentUrl, '->', newUrl);
-        currentUrl = newUrl;
-        notifySidebarOfUrlChange(newUrl);
-      }
+  // Listen for messages from popup or background
+  getChromeRuntime()?.onMessage?.addListener((msg: any, _sender: any, sendResponse: (response: any) => void) => {
+    // Respond to PING messages (used by background to check if content script is alive)
+    if (msg?.type === 'PING') {
+      sendResponse({ ok: true });
+      return true;
     }
 
-    history.pushState = function(...args) {
-      originalPushState.apply(history, args);
-      handleUrlChange();
-    };
+    // Handle profile data requests (from popup or sidebar)
+    if (msg?.type === 'GET_LINKEDIN_PROFILE_DATA') {
+      try {
+        const data = extractProfileData();
+        console.log('[GoGio] Profile data extracted:', {
+          hasName: !!data.fullName,
+          hasHeadline: !!data.headline,
+          hasLocation: !!data.location,
+          hasCompany: !!data.currentCompany,
+          hasRole: !!data.currentRole,
+        });
+        sendResponse(data);
+      } catch (e) {
+        console.warn('[GoGio] Failed to extract LinkedIn profile data', e);
+        sendResponse(null);
+      }
+      return true;
+    }
 
-    history.replaceState = function(...args) {
-      originalReplaceState.apply(history, args);
-      handleUrlChange();
-    };
+    // Handle sidebar toggle (from background/service worker)
+    if (msg?.type === 'TOGGLE_SIDEBAR') {
+      console.log('[GoGio][Sidebar] Received TOGGLE_SIDEBAR message');
+      toggleSidebar();
+      sendResponse({ ok: true, mounted: isSidebarMounted() });
+      return true;
+    }
 
-    window.addEventListener('popstate', handleUrlChange);
+    // Handle mount sidebar (explicit mount, don't toggle)
+    if (msg?.type === 'MOUNT_SIDEBAR') {
+      console.log('[GoGio][Sidebar] Received MOUNT_SIDEBAR message');
+      mountSidebar();
+      sendResponse({ ok: true, mounted: true });
+      return true;
+    }
 
-    // ============================================================================
-    // Initialization
-    // ============================================================================
+    // Handle URL change notification from background (SPA navigation)
+    if (msg?.type === 'URL_CHANGED') {
+      console.log('[GoGio] URL changed notification:', msg.url);
+      currentUrl = msg.url;
+      // Notify sidebar components to refresh data
+      notifySidebarOfUrlChange(msg.url);
+      sendResponse({ ok: true });
+      return true;
+    }
 
-    console.log('[GoGio] LinkedIn content script loaded');
-    console.log('[GoGio] Current URL:', window.location.href);
-  })();
+    // Handle LinkedIn resume PDF download notification (from background)
+    if (msg?.type === 'LINKEDIN_RESUME_DOWNLOADED') {
+      console.log('[GoGio][Sidebar] LinkedIn resume PDF downloaded:', {
+        filename: msg.filename,
+        url: msg.url,
+        downloadId: msg.downloadId,
+      });
+
+      // Store pending resume metadata in chrome.storage.local
+      const chromeApi = (globalThis as any).chrome;
+      chromeApi?.storage?.local?.set(
+        {
+          gogio_last_linkedin_resume: {
+            filename: msg.filename,
+            url: msg.url,
+            downloadId: msg.downloadId,
+            downloadedAt: Date.now(),
+          },
+        },
+        () => {
+          console.log('[GoGio][Sidebar] Stored pending resume metadata in storage');
+          mountSidebar();
+        }
+      );
+
+      sendResponse({ ok: true });
+      return true;
+    }
+
+    return true; // Keep channel open for async response
+  });
+
+  // ============================================================================
+  // SPA Navigation Detection (backup for when background doesn't notify)
+  // ============================================================================
+
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+
+  function handleUrlChange() {
+    const newUrl = window.location.href;
+    if (newUrl !== currentUrl) {
+      console.log('[GoGio] Detected URL change:', currentUrl, '->', newUrl);
+      currentUrl = newUrl;
+      notifySidebarOfUrlChange(newUrl);
+    }
+  }
+
+  history.pushState = function(...args) {
+    originalPushState.apply(history, args);
+    handleUrlChange();
+  };
+
+  history.replaceState = function(...args) {
+    originalReplaceState.apply(history, args);
+    handleUrlChange();
+  };
+
+  window.addEventListener('popstate', handleUrlChange);
+
+  // ============================================================================
+  // Initialization
+  // ============================================================================
+
+  console.log('[GoGio] LinkedIn content script loaded');
+  console.log('[GoGio] Current URL:', window.location.href);
 }
