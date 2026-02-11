@@ -1,62 +1,38 @@
 
 
-# Fix LinkedIn Profile Autofill - Updated Selectors and Retry Logic
+## Fix OAuth to Support Dynamic Extension IDs
 
-## Problem
-The Chrome extension is no longer auto-filling candidate information (name, city, country, work info) from LinkedIn profiles. LinkedIn has recently updated their UI and class names, causing the DOM selectors in `profileExtractor.ts` to fail silently.
+### Problem
+The OAuth flow hardcodes the start URL without telling the backend which extension ID to redirect back to. This causes failures when the extension ID changes (e.g., between development and production builds).
 
-## Root Causes
-1. **Stale CSS class selectors** -- The current code relies on exact LinkedIn class names like `text-heading-xlarge`, `text-body-medium.break-words`, and `t-black--light.break-words` that LinkedIn has changed
-2. **No retry logic** -- Extraction runs once after 300ms; if LinkedIn's SPA hasn't rendered yet, everything returns null
-3. **Silent failures** -- No logging to trace which selectors fail
+### Solution
+Append `redirect_uri` as a query parameter to `OAUTH_START_URL` using `chrome.identity.getRedirectURL("provider_cb")`, which dynamically resolves to the correct `https://<EXTENSION_ID>.chromiumapp.org/provider_cb`.
 
-## Solution
+### Changes
 
-### File 1: `src/lib/profileExtractor.ts`
+#### 1. `src/lib/oauth.ts` (startChromeOAuthFlow)
+- Build the OAuth URL by appending `?redirect_uri=<encoded redirect URL>` using `identity.getRedirectURL("provider_cb")`
+- Pass this constructed URL to `launchWebAuthFlow` instead of the bare `OAUTH_START_URL`
 
-**A. Update name selectors** -- Add broader, more resilient selectors:
-- Keep existing `h1.text-heading-xlarge` and `h1.inline.t-24`
-- Add `h1[class*="text-heading"]` (partial class match survives minor class name changes)
-- Add `.pv-top-card h1` and `.ph5 h1` (structural selectors based on page hierarchy)
-- Keep bare `h1` as final fallback but scope it to the profile area to avoid grabbing wrong h1
+#### 2. `public/background.js` (START_OAUTH handler)
+- Same change: construct the URL with `chrome.identity.getRedirectURL("provider_cb")` as the `redirect_uri` query param before passing to `launchWebAuthFlow`
 
-**B. Update headline selectors** -- Add broader patterns:
-- Keep existing selectors
-- Add `.text-body-medium` without requiring `.break-words`
-- Add `.pv-top-card .text-body-medium`, `.ph5 .text-body-medium`
+### Technical Details
 
-**C. Update location selectors** -- Add broader patterns:
-- Keep existing selectors  
-- Add `.text-body-small` scoped to the top card area
-- Add `.pv-top-card--list-bullet .text-body-small` and `.pb2 .text-body-small`
+Both files will construct the URL like this:
 
-**D. Update experience section selectors** -- Add newer DOM patterns:
-- Add `.pvs-list__outer-container` container selector
-- Add `[id*="profilePagedListComponent"]` pattern
-- For role/company within experience entries, add `.pvs-entity` selectors
-- Add `span[aria-hidden="true"]` within `.pvs-entity` patterns
+```text
+const redirectUri = chrome.identity.getRedirectURL("provider_cb");
+const oauthUrl = `${OAUTH_START_URL}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+```
 
-**E. Add diagnostic logging** -- Log each extraction attempt with the selector that matched (or "none matched") so future failures are easily debugged
+Resulting URL example:
+```text
+https://app.gogio.io/chrome-oauth/start?redirect_uri=https%3A%2F%2Fnhkooggcjgdckjlpbogeanhohjkndhcj.chromiumapp.org%2Fprovider_cb
+```
 
-**F. Add `extractProfileDataWithRetry()` function:**
-- Attempts extraction up to 3 times with delays of 500ms, 1500ms, 3000ms
-- After each attempt, checks if `fullName` was found (primary success indicator)
-- Returns as soon as meaningful data is extracted
-- Falls back to final attempt result if all retries exhaust
+Token parsing (`#token=...`) remains unchanged in both files.
 
-### File 2: `src/components/extension/CandidateForm.tsx`
-
-**Update the autofill `useEffect`** (around line 123):
-- In content script context: replace `extractProfileData()` call with `extractProfileDataWithRetry()`
-- Since `extractProfileDataWithRetry` is async and handles its own delays, remove the `setTimeout(..., 300)` wrapper
-- Add logging when autofill succeeds or fails
-- Keep popup message-passing path unchanged
-
-### Version Bump: `public/manifest.json`
-- Bump version to `0.2.5`
-
-## Technical Notes
-- LinkedIn uses dynamic CSS class names that change during UI refreshes. The fix adds both exact and partial-match selectors (`[class*="..."]`) for resilience.
-- The retry approach handles LinkedIn's SPA rendering where profile content loads asynchronously after navigation.
-- All existing selectors are kept as fallbacks -- new selectors are added before them in priority order.
+### Backend Requirement
+The GoGio backend's `/chrome-oauth/start` endpoint must read the `redirect_uri` query parameter and use it as the redirect target instead of a hardcoded value. This is a separate change in the backend project.
 
