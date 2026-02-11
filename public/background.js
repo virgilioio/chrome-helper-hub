@@ -135,9 +135,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'START_OAUTH') {
     console.log('[GoGio][Background] Starting OAuth flow...');
     
+    const redirectUri = chrome.identity.getRedirectURL('provider_cb');
+    const oauthUrl = `${OAUTH_START_URL}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+    console.log('[GoGio][Background] Using redirect URI:', redirectUri);
+
     chrome.identity.launchWebAuthFlow(
       {
-        url: OAUTH_START_URL,
+        url: oauthUrl,
         interactive: true,
       },
       (redirectUrl) => {

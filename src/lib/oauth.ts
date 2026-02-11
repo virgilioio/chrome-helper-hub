@@ -68,11 +68,14 @@ export async function startChromeOAuthFlow(): Promise<string> {
   }
 
   const identity = getChromeIdentity();
+  const redirectUri = identity.getRedirectURL('provider_cb');
+  const oauthUrl = `${OAUTH_START_URL}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+  console.log('[OAuth] Using redirect URI:', redirectUri);
 
   return new Promise((resolve, reject) => {
     identity.launchWebAuthFlow(
       {
-        url: OAUTH_START_URL,
+        url: oauthUrl,
         interactive: true,
       },
       (redirectUrl: string | undefined) => {
