@@ -72,7 +72,9 @@ export const getSafeExtensionUrl = (path: string): string => {
   try {
     const chrome = (globalThis as any).chrome;
     if (chrome?.runtime?.getURL && chrome.runtime.id) {
-      return chrome.runtime.getURL(path);
+      const url = chrome.runtime.getURL(path);
+      if (url.includes('invalid')) return '';
+      return url;
     }
   } catch {}
   return '';
