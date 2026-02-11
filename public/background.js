@@ -213,7 +213,16 @@ async function ensureContentScriptReady(tabId) {
     return true;
   }
 
-  // Try to inject the content script
+  // Retry PING after a short delay — manifest injection may still be initializing
+  console.log('[GoGio][Background] Content script not ready, retrying PING in 300ms...');
+  await new Promise(resolve => setTimeout(resolve, 300));
+  const isReadyRetry = await isContentScriptReady(tabId);
+  if (isReadyRetry) {
+    console.log('[GoGio][Background] Content script ready on retry');
+    return true;
+  }
+
+  // Last resort: inject the content script (the script itself has a duplicate guard)
   console.log('[GoGio][Background] Injecting content script...');
   try {
     await chrome.scripting.executeScript({
@@ -222,7 +231,7 @@ async function ensureContentScriptReady(tabId) {
     });
     
     // Wait a bit for it to initialize
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // Verify it's ready now
     const readyAfterInject = await isContentScriptReady(tabId);
