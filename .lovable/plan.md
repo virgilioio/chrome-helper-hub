@@ -1,39 +1,39 @@
 
 
-## Fix: Eliminate chrome-extension://invalid/ and Add Backend Error Diagnostics
+## Fix Remaining `chrome-extension://invalid/` Error
 
-### Problem
-1. Image components fall back to `'/filename.png'` when `getSafeExtensionUrl` returns empty, which on LinkedIn resolves to `https://www.linkedin.com/filename.png` or triggers stale `chrome-extension://invalid/` requests
-2. The 400 error from the backend lacks diagnostic detail -- we need to see the exact URL fetched and full response body
+### Root Cause Found
+
+**`src/components/extension/TokenSetup.tsx` line 62** still has an unsafe fallback:
+
+```typescript
+const getAvatarUrl = (): string => {
+  return getSafeExtensionUrl('gio-face-2.png') || '/gio-face-2.png';  // <-- BUG
+};
+```
+
+When the extension context is invalid, `getSafeExtensionUrl` returns `''`, then `|| '/gio-face-2.png'` kicks in, and line 169 renders `<img src="/gio-face-2.png">` unconditionally -- no empty-check like the other components have.
+
+The previous fix updated `GioFlipLoader`, `GoGioLogo`, and `SidebarShell` but **missed `TokenSetup.tsx`**.
 
 ### Changes
 
-#### A. Image fallbacks -- render CSS/text instead of broken `<img>` tags
+**1. `src/components/extension/TokenSetup.tsx`**
 
-**1. `src/components/extension/GioFlipLoader.tsx`**
-- When `getSafeExtensionUrl` returns empty, render a pulsing CSS circle (purple, branded) instead of an `<img>` tag
-- No network request occurs
+- Remove the `|| '/gio-face-2.png'` fallback from `getAvatarUrl()`
+- Add a conditional render on line 169: if `avatarUrl` is empty, show a CSS circle with "G" initial instead of `<img>`
 
-**2. `src/components/extension/GoGioLogo.tsx`**
-- When URL is empty, render a styled text span "GoGio" instead of `<img>`
+**2. `src/lib/api.ts`** -- Add proxy request logging (from original plan, if not yet applied)
 
-**3. `src/components/extension/SidebarShell.tsx`**
-- When avatar URL is empty, render a purple CSS circle with "G" initial instead of `<img>`
+**3. `public/background.js`** -- Add full URL and error body logging (from original plan, if not yet applied)
 
-#### B. Enhanced debug logging
+### Technical Details
 
-**4. `src/lib/api.ts`**
-- Add log before proxy call: `[ApiClient] Proxy request: METHOD endpoint`
+```text
+TokenSetup.tsx changes:
+  Line 62: return getSafeExtensionUrl('gio-face-2.png');  // remove fallback
+  Line 169: wrap <img> in conditional, add CSS circle fallback
+```
 
-**5. `public/background.js`**
-- Log the exact full URL being fetched: `[GoGio][Background] Fetching URL: <fullUrl>`
-- On non-ok response, log status and full response text
-
-#### C. Version bump
-
-**6. `public/manifest.json`** -- bump to `0.2.7`
-
-### Technical Detail
-
-The key insight: the `|| '/gogio-logo.png'` fallback is the source of `chrome-extension://invalid/` requests. When the extension context is invalid, `getSafeExtensionUrl` correctly returns `''`, but then `|| '/gogio-logo.png'` creates a relative URL that the browser resolves against the current origin. In some states this produces `chrome-extension://invalid/gogio-logo.png`. The fix is to never render an `<img>` when there's no valid URL.
+This is the last remaining source of `chrome-extension://invalid/` network requests.
 
