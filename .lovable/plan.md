@@ -1,39 +1,46 @@
 
 
-## Fix Remaining `chrome-extension://invalid/` Error
+## Fix Duplicate Content Script Loading and Sidebar Glitch
 
-### Root Cause Found
+### Problem
+The content script is loading **twice** on LinkedIn pages:
+- Once via the manifest's `content_scripts` auto-injection
+- Again via the background script's `ensureContentScriptReady()` calling `chrome.scripting.executeScript()`
 
-**`src/components/extension/TokenSetup.tsx` line 62** still has an unsafe fallback:
-
-```typescript
-const getAvatarUrl = (): string => {
-  return getSafeExtensionUrl('gio-face-2.png') || '/gio-face-2.png';  // <-- BUG
-};
-```
-
-When the extension context is invalid, `getSafeExtensionUrl` returns `''`, then `|| '/gio-face-2.png'` kicks in, and line 169 renders `<img src="/gio-face-2.png">` unconditionally -- no empty-check like the other components have.
-
-The previous fix updated `GioFlipLoader`, `GoGioLogo`, and `SidebarShell` but **missed `TokenSetup.tsx`**.
+Each injection creates a separate JavaScript module scope with its own `isMounted = false`, so both instances react to `TOGGLE_SIDEBAR` and mount separate sidebars -- causing the glitch.
 
 ### Changes
 
-**1. `src/components/extension/TokenSetup.tsx`**
+**1. `src/content/linkedinContent.ts`** -- Add a duplicate-load guard
 
-- Remove the `|| '/gio-face-2.png'` fallback from `getAvatarUrl()`
-- Add a conditional render on line 169: if `avatarUrl` is empty, show a CSS circle with "G" initial instead of `<img>`
+At the very top of the file, check for a global marker on `window`. If already set, bail out immediately. This prevents the second injection from registering duplicate listeners.
 
-**2. `src/lib/api.ts`** -- Add proxy request logging (from original plan, if not yet applied)
+```text
+// Top of file:
+if ((window as any).__gogio_content_loaded) {
+  console.log('[GoGio] Content script already loaded, skipping duplicate');
+  // Don't register any listeners or overrides
+} else {
+  (window as any).__gogio_content_loaded = true;
+  // ... rest of existing code
+}
+```
 
-**3. `public/background.js`** -- Add full URL and error body logging (from original plan, if not yet applied)
+**2. `public/background.js`** -- Make `ensureContentScriptReady` less aggressive
+
+The PING check already works -- if the content script responds, skip re-injection. The issue is that `executeScript` re-injects even when manifest already did it but PING failed due to timing. Add a small retry before re-injecting:
+
+```text
+// In ensureContentScriptReady:
+// Try PING twice with a delay before falling back to injection
+```
+
+### About the other issues
+
+- **`chrome-extension://invalid/` errors**: These originate from LinkedIn's own scripts (stack trace: `5fdhwcppjcvqvxsawd8pg1n51`), not from our extension. They are harmless and cannot be fixed on our side.
+
+- **"Invalid redirect URI"**: Your dev extension ID generates redirect URL `https://okkkglbelakkhphmbgabailjbmkpjfka.chromiumapp.org/provider_cb`. This URL must be whitelisted on your GoGio backend (app.gogio.io). This is a server-side configuration change, not something we can fix in the extension code.
 
 ### Technical Details
 
-```text
-TokenSetup.tsx changes:
-  Line 62: return getSafeExtensionUrl('gio-face-2.png');  // remove fallback
-  Line 169: wrap <img> in conditional, add CSS circle fallback
-```
-
-This is the last remaining source of `chrome-extension://invalid/` network requests.
-
+The root cause is that Chrome's `chrome.scripting.executeScript()` creates a new module execution context, separate from the manifest-injected one. Both register `chrome.runtime.onMessage` listeners, so every message gets handled twice. The window-level guard (`__gogio_content_loaded`) works because both injections share the same `window` object on the page.
