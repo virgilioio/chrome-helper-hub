@@ -6,10 +6,6 @@ import { URL_CHANGE_EVENT } from '@/content/sidebarMount';
 import { useLinkedInResumeDetection } from '@/hooks/useLinkedInResumeDetection';
 import { getSafeExtensionUrl } from '@/lib/chromeApi';
 
-// Get the avatar URL - works in both popup and content script contexts
-const getAvatarUrl = (): string => {
-  return getSafeExtensionUrl('gio-avatar.png') || '/gio-avatar.png';
-};
 
 // Chrome storage helpers for sidebar state
 const getSidebarCollapsed = (): Promise<boolean> => {
@@ -118,7 +114,7 @@ export const SidebarShell: React.FC = () => {
     return null;
   }
 
-  const avatarUrl = getAvatarUrl();
+  const avatarUrl = getSafeExtensionUrl('gio-avatar.png') || '/gio-avatar.png';
 
   // Floating button when collapsed
   if (collapsed) {
@@ -133,6 +129,7 @@ export const SidebarShell: React.FC = () => {
           src={avatarUrl} 
           alt="GoGio" 
           className="gogio-floating-avatar"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
       </button>
     );

@@ -7,11 +7,6 @@ interface GoGioLogoProps {
   variant?: 'icon' | 'wordmark';
 }
 
-// Get the logo URL - works in both popup and content script contexts
-const getLogoUrl = (): string => {
-  return getSafeExtensionUrl('gogio-logo.png') || '/gogio-logo.png';
-};
-
 export const GoGioLogo: React.FC<GoGioLogoProps> = ({ size = 'md', className = '', variant = 'wordmark' }) => {
   const sizeStyles: Record<string, React.CSSProperties> = {
     sm: { height: '24px', width: 'auto' },
@@ -19,12 +14,15 @@ export const GoGioLogo: React.FC<GoGioLogoProps> = ({ size = 'md', className = '
     lg: { height: '40px', width: 'auto' },
   };
 
+  const logoUrl = getSafeExtensionUrl('gogio-logo.png') || '/gogio-logo.png';
+
   return (
     <img 
-      src={getLogoUrl()} 
+      src={logoUrl} 
       alt="GoGio" 
       style={{ ...sizeStyles[size], objectFit: 'contain' }}
       className={className}
+      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
     />
   );
 };

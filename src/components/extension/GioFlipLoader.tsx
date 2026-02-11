@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getSafeExtensionUrl } from '@/lib/chromeApi';
 
-// Get the correct URL for assets in Chrome extension context
-// Uses safe helper that checks runtime.id before calling getURL
-const getAssetUrl = (filename: string): string => {
-  return getSafeExtensionUrl(filename) || `/${filename}`;
-};
-
 // All 5 Gio face images
 const GIO_FACES = [
   'gio-face-1.png', // Yellow - front
@@ -69,7 +63,7 @@ export const GioFlipLoader: React.FC<GioFlipLoaderProps> = ({
     };
   }, []);
 
-  const faceUrl = getAssetUrl(GIO_FACES[currentFace]);
+  const faceUrl = getSafeExtensionUrl(GIO_FACES[currentFace]) || `/${GIO_FACES[currentFace]}`;
 
   return (
     <div 
@@ -84,6 +78,7 @@ export const GioFlipLoader: React.FC<GioFlipLoaderProps> = ({
         src={faceUrl}
         alt="Loading..."
         className="gio-flip-face"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         style={{
           width: size,
           height: size,

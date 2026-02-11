@@ -129,6 +129,10 @@ async function requestViaProxy<T>(
         console.log('[ApiClient] Proxy response:', response.status, 'ok:', response.ok);
 
         if (!response.ok) {
+          const errDetail = typeof response.data === 'string' 
+            ? response.data 
+            : JSON.stringify(response.data);
+          console.error('[ApiClient] Proxy error detail:', errDetail);
           if (response.status === 401) {
             reject(new Error('UNAUTHORIZED'));
           } else {
