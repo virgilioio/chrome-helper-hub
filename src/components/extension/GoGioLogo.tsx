@@ -14,7 +14,18 @@ export const GoGioLogo: React.FC<GoGioLogoProps> = ({ size = 'md', className = '
     lg: { height: '40px', width: 'auto' },
   };
 
-  const logoUrl = getSafeExtensionUrl('gogio-logo.png') || '/gogio-logo.png';
+  const logoUrl = getSafeExtensionUrl('gogio-logo.png');
+
+  if (!logoUrl) {
+    return (
+      <span
+        className={className}
+        style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: size === 'sm' ? '16px' : size === 'md' ? '20px' : '24px', color: '#6F3FF5', letterSpacing: '-0.5px' }}
+      >
+        GoGio
+      </span>
+    );
+  }
 
   return (
     <img 
@@ -22,7 +33,6 @@ export const GoGioLogo: React.FC<GoGioLogoProps> = ({ size = 'md', className = '
       alt="GoGio" 
       style={{ ...sizeStyles[size], objectFit: 'contain' }}
       className={className}
-      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
     />
   );
 };

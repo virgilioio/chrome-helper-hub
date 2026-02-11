@@ -45,7 +45,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         // path now contains the full query string like "chrome-api-gateway?action=me"
-        const res = await fetch(`${GATEWAY_URL}?${path.includes('?') ? path.split('?')[1] : path}`, {
+        const fullUrl = `${GATEWAY_URL}?${path.includes('?') ? path.split('?')[1] : path}`;
+        console.log('[GoGio][Background] Fetching URL:', fullUrl);
+
+        const res = await fetch(fullUrl, {
           method,
           headers,
           body: body ? JSON.stringify(body) : undefined,
@@ -59,6 +62,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           data = text ? JSON.parse(text) : null;
         } catch {
           data = text;
+        }
+
+        if (!res.ok) {
+          console.error('[GoGio][Background] API error:', res.status, text);
         }
 
         sendResponse({

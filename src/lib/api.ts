@@ -177,7 +177,7 @@ class ApiClient {
     
     // Use background proxy in content script context to avoid CORS
     if (isContentScriptContext()) {
-      console.log('[ApiClient] Using background proxy for:', action);
+      console.log('[ApiClient] Proxy request:', method, endpoint);
       return requestViaProxy<T>(endpoint, this.token, method, body);
     }
 
