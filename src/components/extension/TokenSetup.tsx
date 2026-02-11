@@ -59,7 +59,7 @@ interface TokenSetupProps {
 
 // Get the avatar URL - works in both popup and content script contexts
 const getAvatarUrl = (): string => {
-  return getSafeExtensionUrl('gio-face-2.png') || '/gio-face-2.png';
+  return getSafeExtensionUrl('gio-face-2.png');
 };
 
 export const TokenSetup: React.FC<TokenSetupProps> = ({ 
@@ -166,7 +166,11 @@ export const TokenSetup: React.FC<TokenSetupProps> = ({
       <div style={{ width: '100%', maxWidth: '288px', margin: '0 auto', textAlign: 'center' }}>
         {/* Logo Container - 64x64 circle with 10% purple bg */}
         <div className="gogio-logo-container">
-          <img src={avatarUrl} alt="GoGio" style={{ width: 48, height: 48, borderRadius: '50%' }} />
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="GoGio" style={{ width: 48, height: 48, borderRadius: '50%' }} />
+          ) : (
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#6F3FF5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 22 }}>G</div>
+          )}
         </div>
 
         {/* Title with purple period */}
