@@ -1,46 +1,40 @@
 
 
-## Fix Duplicate Content Script Loading and Sidebar Glitch
+## Fix: Content Script Build Error (Top-Level Await in IIFE)
 
 ### Problem
-The content script is loading **twice** on LinkedIn pages:
-- Once via the manifest's `content_scripts` auto-injection
-- Again via the background script's `ensureContentScriptReady()` calling `chrome.scripting.executeScript()`
+The duplicate-load guard introduced `await import(...)` at the top level of the content script. The build config uses `format: "iife"` (required for Chrome content scripts), which does **not** support top-level `await`. This causes the built `linkedin-content.js` to fail loading.
 
-Each injection creates a separate JavaScript module scope with its own `isMounted = false`, so both instances react to `TOGGLE_SIDEBAR` and mount separate sidebars -- causing the glitch.
+### Solution
+Wrap the entire `else` block in an **async IIFE** `(async () => { ... })()` so the `await` calls are inside a function scope, which is valid in IIFE format.
 
-### Changes
+### File: `src/content/linkedinContent.ts`
 
-**1. `src/content/linkedinContent.ts`** -- Add a duplicate-load guard
-
-At the very top of the file, check for a global marker on `window`. If already set, bail out immediately. This prevents the second injection from registering duplicate listeners.
+Change the structure from:
 
 ```text
-// Top of file:
 if ((window as any).__gogio_content_loaded) {
-  console.log('[GoGio] Content script already loaded, skipping duplicate');
-  // Don't register any listeners or overrides
+  ...
 } else {
   (window as any).__gogio_content_loaded = true;
-  // ... rest of existing code
+  const { ... } = await import('./sidebarMount');  // TOP-LEVEL AWAIT - breaks IIFE
+  ...
 }
 ```
 
-**2. `public/background.js`** -- Make `ensureContentScriptReady` less aggressive
-
-The PING check already works -- if the content script responds, skip re-injection. The issue is that `executeScript` re-injects even when manifest already did it but PING failed due to timing. Add a small retry before re-injecting:
+To:
 
 ```text
-// In ensureContentScriptReady:
-// Try PING twice with a delay before falling back to injection
+if ((window as any).__gogio_content_loaded) {
+  ...
+} else {
+  (window as any).__gogio_content_loaded = true;
+  (async () => {
+    const { ... } = await import('./sidebarMount');
+    // ... rest of existing code stays the same, just indented one level
+  })();
+}
 ```
 
-### About the other issues
+This is a single-file, structural-only change. No logic changes needed.
 
-- **`chrome-extension://invalid/` errors**: These originate from LinkedIn's own scripts (stack trace: `5fdhwcppjcvqvxsawd8pg1n51`), not from our extension. They are harmless and cannot be fixed on our side.
-
-- **"Invalid redirect URI"**: Your dev extension ID generates redirect URL `https://okkkglbelakkhphmbgabailjbmkpjfka.chromiumapp.org/provider_cb`. This URL must be whitelisted on your GoGio backend (app.gogio.io). This is a server-side configuration change, not something we can fix in the extension code.
-
-### Technical Details
-
-The root cause is that Chrome's `chrome.scripting.executeScript()` creates a new module execution context, separate from the manifest-injected one. Both register `chrome.runtime.onMessage` listeners, so every message gets handled twice. The window-level guard (`__gogio_content_loaded`) works because both injections share the same `window` object on the page.
