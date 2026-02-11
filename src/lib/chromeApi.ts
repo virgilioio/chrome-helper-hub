@@ -56,13 +56,8 @@ export const isExtensionContextValid = (): boolean => {
   try {
     const chrome = (globalThis as any).chrome;
     if (!chrome?.runtime) return false;
-    // chrome.runtime.id is undefined when context is invalidated
     if (!chrome.runtime.id) return false;
-    // Double-check with getURL if available
-    if (chrome.runtime.getURL) {
-      const testUrl = chrome.runtime.getURL('test');
-      if (testUrl.includes('invalid')) return false;
-    }
+    // runtime.id check is sufficient — removed getURL probe which can trigger network requests
     return true;
   } catch {
     return false;
