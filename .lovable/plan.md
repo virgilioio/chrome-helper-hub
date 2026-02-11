@@ -1,38 +1,64 @@
 
 
-## Fix OAuth to Support Dynamic Extension IDs
+## Fix API Proxy Architecture: Eliminate chrome-extension://invalid/ URLs
 
-### Problem
-The OAuth flow hardcodes the start URL without telling the backend which extension ID to redirect back to. This causes failures when the extension ID changes (e.g., between development and production builds).
+### Root Cause Analysis
 
-### Solution
-Append `redirect_uri` as a query parameter to `OAUTH_START_URL` using `chrome.identity.getRedirectURL("provider_cb")`, which dynamically resolves to the correct `https://<EXTENSION_ID>.chromiumapp.org/provider_cb`.
+There are two separate issues causing the error:
+
+1. **Asset loading triggers `chrome-extension://invalid/` fetches**: `GioFlipLoader.tsx` uses `getAssetUrl()` which calls `chrome.runtime.getURL()` without checking context validity first. When the runtime is in a transitional state (e.g., right after OAuth completes but before context fully stabilizes), this produces `chrome-extension://invalid/gio-face-1.png` network requests that fail.
+
+2. **400 error from API proxy**: The `getMe()` call after OAuth goes through the background proxy correctly, but the 400 likely comes from the backend rejecting the request (separate from the `chrome-extension://invalid/` issue). Debug logs will help confirm this.
 
 ### Changes
 
-#### 1. `src/lib/oauth.ts` (startChromeOAuthFlow)
-- Build the OAuth URL by appending `?redirect_uri=<encoded redirect URL>` using `identity.getRedirectURL("provider_cb")`
-- Pass this constructed URL to `launchWebAuthFlow` instead of the bare `OAUTH_START_URL`
+#### 1. `src/components/extension/GioFlipLoader.tsx` -- Use safe URL helper
+- Replace the local `getAssetUrl` function with `getSafeExtensionUrl` from `chromeApi.ts`, which already checks `chrome.runtime.id` before calling `getURL`
+- Provide fallback path when extension context is invalid
 
-#### 2. `public/background.js` (START_OAUTH handler)
-- Same change: construct the URL with `chrome.identity.getRedirectURL("provider_cb")` as the `redirect_uri` query param before passing to `launchWebAuthFlow`
+#### 2. `src/lib/chromeApi.ts` -- Remove getURL probe from validity check
+- Remove the `chrome.runtime.getURL('test')` call from `isExtensionContextValid()` -- checking `chrome.runtime.id` alone is sufficient, and the `getURL` call can trigger browser-level network requests in some contexts
+- Add debug logging to `isExtensionContextValid()`
+
+#### 3. `src/lib/api.ts` -- Add debug logs before proxy usage
+- Add `console.log("[Debug] runtime.id", ...)` and `console.log("[Debug] location.href", ...)` before the proxy path to verify correct context detection during OAuth validation
+- Log the full endpoint being requested
+
+#### 4. `src/lib/oauthBridge.ts` -- Add debug log to context detection
+- Add a debug log inside `isContentScriptContext()` showing the detection result and the values it checks
 
 ### Technical Details
 
-Both files will construct the URL like this:
+**GioFlipLoader fix:**
+```typescript
+import { getSafeExtensionUrl } from '@/lib/chromeApi';
 
-```text
-const redirectUri = chrome.identity.getRedirectURL("provider_cb");
-const oauthUrl = `${OAUTH_START_URL}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+const getAssetUrl = (filename: string): string => {
+  return getSafeExtensionUrl(filename) || `/${filename}`;
+};
 ```
 
-Resulting URL example:
-```text
-https://app.gogio.io/chrome-oauth/start?redirect_uri=https%3A%2F%2Fnhkooggcjgdckjlpbogeanhohjkndhcj.chromiumapp.org%2Fprovider_cb
+**isExtensionContextValid simplification (chromeApi.ts):**
+```typescript
+export const isExtensionContextValid = (): boolean => {
+  try {
+    const chrome = (globalThis as any).chrome;
+    if (!chrome?.runtime) return false;
+    if (!chrome.runtime.id) return false;
+    // Removed getURL probe -- runtime.id check is sufficient
+    return true;
+  } catch {
+    return false;
+  }
+};
 ```
 
-Token parsing (`#token=...`) remains unchanged in both files.
+**Debug logs in api.ts requestViaProxy:**
+```typescript
+console.log('[Debug] runtime.id', (globalThis as any).chrome?.runtime?.id);
+console.log('[Debug] location.href', location.href);
+console.log('[Debug] isContentScript:', isContentScriptContext());
+```
 
-### Backend Requirement
-The GoGio backend's `/chrome-oauth/start` endpoint must read the `redirect_uri` query parameter and use it as the redirect target instead of a hardcoded value. This is a separate change in the backend project.
+These changes ensure no `chrome-extension://` URLs are ever fetched in content script context, and provide visibility into the 400 error source.
 
