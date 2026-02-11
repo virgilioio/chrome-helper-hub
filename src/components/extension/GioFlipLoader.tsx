@@ -63,7 +63,7 @@ export const GioFlipLoader: React.FC<GioFlipLoaderProps> = ({
     };
   }, []);
 
-  const faceUrl = getSafeExtensionUrl(GIO_FACES[currentFace]) || `/${GIO_FACES[currentFace]}`;
+  const faceUrl = getSafeExtensionUrl(GIO_FACES[currentFace]);
 
   return (
     <div 
@@ -74,21 +74,33 @@ export const GioFlipLoader: React.FC<GioFlipLoaderProps> = ({
         perspective: '200px',
       }}
     >
-      <img
-        src={faceUrl}
-        alt="Loading..."
-        className="gio-flip-face"
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: '50%',
-          transform: isFlipping ? 'rotateY(90deg)' : 'rotateY(0deg)',
-          transition: `transform 150ms ${isFlipping ? 'ease-in' : 'ease-out'}`,
-          transformStyle: 'preserve-3d',
-          backfaceVisibility: 'hidden',
-        }}
-      />
+      {faceUrl ? (
+        <img
+          src={faceUrl}
+          alt="Loading..."
+          className="gio-flip-face"
+          style={{
+            width: size,
+            height: size,
+            borderRadius: '50%',
+            transform: isFlipping ? 'rotateY(90deg)' : 'rotateY(0deg)',
+            transition: `transform 150ms ${isFlipping ? 'ease-in' : 'ease-out'}`,
+            transformStyle: 'preserve-3d',
+            backfaceVisibility: 'hidden',
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            width: size,
+            height: size,
+            borderRadius: '50%',
+            background: '#6F3FF5',
+            opacity: 0.6,
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }}
+        />
+      )}
     </div>
   );
 };

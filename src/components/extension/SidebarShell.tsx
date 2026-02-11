@@ -114,7 +114,7 @@ export const SidebarShell: React.FC = () => {
     return null;
   }
 
-  const avatarUrl = getSafeExtensionUrl('gio-avatar.png') || '/gio-avatar.png';
+  const avatarUrl = getSafeExtensionUrl('gio-avatar.png');
 
   // Floating button when collapsed
   if (collapsed) {
@@ -125,12 +125,20 @@ export const SidebarShell: React.FC = () => {
         title="Open GoGio"
         aria-label="Open GoGio sidebar"
       >
-        <img 
-          src={avatarUrl} 
-          alt="GoGio" 
-          className="gogio-floating-avatar"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
+        {avatarUrl ? (
+          <img 
+            src={avatarUrl} 
+            alt="GoGio" 
+            className="gogio-floating-avatar"
+          />
+        ) : (
+          <div
+            className="gogio-floating-avatar"
+            style={{ width: 40, height: 40, borderRadius: '50%', background: '#6F3FF5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '18px', fontFamily: 'Poppins, sans-serif' }}
+          >
+            G
+          </div>
+        )}
       </button>
     );
   }
