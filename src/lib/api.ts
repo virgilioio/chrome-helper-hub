@@ -92,6 +92,12 @@ async function requestViaProxy<T>(
   method: string = 'GET',
   body?: any
 ): Promise<T> {
+  // Debug: log execution context before proxy usage
+  console.log('[Debug] runtime.id', (globalThis as any).chrome?.runtime?.id);
+  console.log('[Debug] location.href', location.href);
+  console.log('[Debug] isContentScript:', isContentScriptContext());
+  console.log('[Debug] proxy endpoint:', path);
+
   // Guard against invalidated extension context
   if (!isExtensionContextValid()) {
     throw new Error('Extension was updated. Please refresh this page to reconnect.');

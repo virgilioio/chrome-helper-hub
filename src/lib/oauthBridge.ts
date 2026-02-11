@@ -13,10 +13,12 @@ interface OAuthResponse {
 export function isContentScriptContext(): boolean {
   // In content scripts, chrome.identity is not available
   const chrome = (globalThis as any).chrome;
-  return chrome && 
-         chrome.runtime && 
-         typeof chrome.runtime.sendMessage === 'function' &&
-         typeof chrome.identity?.launchWebAuthFlow !== 'function';
+  const hasRuntime = !!chrome?.runtime;
+  const hasSendMessage = typeof chrome?.runtime?.sendMessage === 'function';
+  const hasIdentity = typeof chrome?.identity?.launchWebAuthFlow === 'function';
+  const result = hasRuntime && hasSendMessage && !hasIdentity;
+  console.log('[Debug] isContentScriptContext:', result, { hasRuntime, hasSendMessage, hasIdentity });
+  return result;
 }
 
 /**

@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { getSafeExtensionUrl } from '@/lib/chromeApi';
 
 // Get the correct URL for assets in Chrome extension context
+// Uses safe helper that checks runtime.id before calling getURL
 const getAssetUrl = (filename: string): string => {
-  const chrome = (globalThis as any).chrome;
-  if (chrome?.runtime?.getURL) {
-    return chrome.runtime.getURL(filename);
-  }
-  return `/${filename}`;
+  return getSafeExtensionUrl(filename) || `/${filename}`;
 };
 
 // All 5 Gio face images
