@@ -1,26 +1,46 @@
 
 
-## Add Production Extension Key to Manifest
+## Fix "Project not specified" 400 Error
 
-### What This Does
-Adding the public key to `manifest.json` forces your local unpacked extension to use the same ID as the production Chrome Web Store version (`nhkooggcjgdckjlpbogeanhohjkndhcj`). This means the OAuth redirect URI will match what your backend already has whitelisted, so login will work in dev mode.
+### Root Cause
 
-### Change
+The extension's API URL uses the **Lovable project ID** (`aba41743-...`) in a Lovable Cloud proxy domain (`*.functions.supabase.co`). This proxy can no longer route the request to your Supabase project, returning "Project not specified" at the infrastructure level -- before the edge function code ever runs.
 
-**File: `public/manifest.json`**
+The actual Supabase project ref is `etrxjxstjfcozdjumfsj`. The edge function code and its `verify_jwt = false` config are both correct -- this is purely a URL routing issue.
 
-Add a `"key"` field at the top level of the manifest object, right after `"manifest_version": 3`:
+### Fix: Switch to Direct Supabase URL + Add apikey Header
 
-```json
-"key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAohSyaeCnlwOAc9tlnRexYld7Uhnc9jykFShIPQVL432oF3zsHNMytvy82OirGONCHgi1HUFY9Vcei8j7/oor3Ii36nZTKazEiyFPAhl+bAyOg2HkAAd3QHi+dxV5WHwFMx4DzRlDUHPgv43VWxYdZf0OLzS6u+wMbZax7Lmj6EhgjqYzlpsYam4WJs24oJslvLt5gShJYDZUECCc1e8aybQzznSmqwLG+LZcKF2DCnko/mC+dhRxhTywd3OcW5d8D93rjjcSajy/9yFzPLd1m/B1ZMeGx7FlJ6xhuKPrE2z5/39WkQQ37hUb/seKhELLZQEYzm4mMUBpkN78Pu0XFQIDAQAB"
-```
+We'll update the GATEWAY_URL to go directly to Supabase (bypassing the Lovable proxy) and include the required `apikey` header for project identification.
+
+**New URL:** `https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1/chrome-api-gateway`
+
+### Changes
+
+**1. `src/lib/api.ts`** -- Update GATEWAY_URL and add apikey header to direct fetch
+
+- Change `GATEWAY_URL` from `https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/chrome-api-gateway` to `https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1/chrome-api-gateway`
+- Add `apikey` header to the direct fetch path (popup context)
+
+**2. `public/background.js`** -- Update GATEWAY_URL and add apikey header to proxy fetch
+
+- Change `GATEWAY_URL` to the direct Supabase URL
+- Add `apikey` header to the proxy fetch
+
+**3. `public/manifest.json`** -- Update host_permissions
+
+- Add `https://etrxjxstjfcozdjumfsj.supabase.co/*` to `host_permissions`
+- Keep the old `*.supabase.co` permission for backward compatibility, or replace it
+
+### Technical Details
+
+The Supabase anon key (`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0cnhqeHN0amZjb3pkanVtZnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MzM3MjMsImV4cCI6MjA2NTEwOTcyM30.xhhEmT2ikIqFO9IiZZC22zhWlSTC-ytBxP6EGGXtC44`) is a **publishable** key -- it's safe to include in client-side code. It's already public in the GoGioATS web app.
+
+The `apikey` header tells Supabase which project the request belongs to. Combined with the project ref in the URL, this ensures proper routing even with `verify_jwt = false`.
 
 ### After Applying
-1. Remove the current unpacked extension from `chrome://extensions`
-2. Rebuild and re-load the unpacked extension from the `dist` folder
-3. Verify the extension ID now shows as `nhkooggcjgdckjlpbogeanhohjkndhcj`
-4. Test the OAuth login flow -- the redirect URI should now be accepted
 
-### Note
-The `key` field is safe to keep in production builds -- Chrome Web Store ignores it and uses its own key. It only affects unpacked/dev loads.
+1. Rebuild the extension
+2. Remove and re-load the unpacked extension from `dist`
+3. Test the OAuth login flow from the LinkedIn sidebar
+4. The `getMe()` call should now reach the edge function and succeed
 
