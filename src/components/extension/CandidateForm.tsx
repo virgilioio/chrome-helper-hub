@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SidebarSearchableSelect } from './SidebarSearchableSelect';
 import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
@@ -23,8 +23,15 @@ import {
   Globe, 
   FileText, 
   Tag,
-  Plus
+  Plus,
+  Paperclip
 } from 'lucide-react';
+
+interface ManualResume {
+  filename: string;
+  data: string; // base64
+  size: number;
+}
 
 interface CandidateFormProps {
   userEmail: string;
@@ -93,7 +100,10 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingContact, setIsFetchingContact] = useState(false);
-const [duplicateResult, setDuplicateResult] = useState<{
+  const [manualResume, setManualResume] = useState<ManualResume | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [duplicateResult, setDuplicateResult] = useState<{
     action: 'created' | 'attached' | 'updated';
     candidateName: string;
     existingJobs: Array<{
@@ -102,6 +112,41 @@ const [duplicateResult, setDuplicateResult] = useState<{
       candidateUrl: string;
     }>;
   } | null>(null);
+
+  // Handle manual file selection
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('Only PDF files are supported');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const arrayBuffer = reader.result as ArrayBuffer;
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+      setManualResume({
+        filename: file.name,
+        data: base64,
+        size: file.size,
+      });
+      toast.success(`Resume "${file.name}" ready to attach`);
+    };
+    reader.onerror = () => {
+      toast.error('Failed to read file');
+    };
+    reader.readAsArrayBuffer(file);
+
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+  }, []);
 
   // Load organizations on mount
   useEffect(() => {
@@ -228,6 +273,7 @@ const [duplicateResult, setDuplicateResult] = useState<{
     setSkills('');
     setNotes('');
     setDuplicateResult(null);
+    setManualResume(null);
     // Keep linkedinUrl as user might add multiple from same profile
   };
 
@@ -290,25 +336,38 @@ const [duplicateResult, setDuplicateResult] = useState<{
         return 'Candidate added to GoGio!';
       };
       
-      // Upload resume if pending
-      if (hasPendingResume && pendingResume && result.candidate_id) {
+      // Upload resume if pending (auto-detected or manual)
+      const hasResume = (hasPendingResume && pendingResume) || manualResume;
+      if (hasResume && result.candidate_id) {
         try {
-          const fileData = await readDownloadedFile(pendingResume.downloadId);
+          let resumeData: { data: string; filename: string };
+
+          if (manualResume) {
+            // Use manually selected file
+            resumeData = { data: manualResume.data, filename: manualResume.filename };
+          } else {
+            // Use auto-detected LinkedIn download
+            const fileData = await readDownloadedFile(pendingResume!.downloadId);
+            resumeData = { data: fileData.data, filename: pendingResume!.filename };
+          }
+
           await apiClient.uploadResume({
             candidate_id: result.candidate_id,
-            filename: pendingResume.filename,
-            file_data: fileData.data,
+            filename: resumeData.filename,
+            file_data: resumeData.data,
           });
           toast.success(result.was_duplicate ? getSuccessMessage() + ' with resume!' : 'Candidate added with resume!', {
             icon: <CheckCircle2 className="h-4 w-4" style={{ color: '#12B886' }} />,
           });
-          clearPendingResume();
+          if (manualResume) setManualResume(null);
+          if (hasPendingResume) clearPendingResume();
         } catch (resumeErr) {
           console.error('[GoGio] Resume upload failed:', resumeErr);
           toast.warning(getSuccessMessage() + ', but resume upload failed', {
             description: resumeErr instanceof Error ? resumeErr.message : 'Unknown error',
           });
-          clearPendingResume();
+          if (manualResume) setManualResume(null);
+          if (hasPendingResume) clearPendingResume();
         }
       } else {
         toast.success(getSuccessMessage(), {
@@ -468,6 +527,36 @@ const [duplicateResult, setDuplicateResult] = useState<{
               className="gogio-resume-dismiss"
               onClick={clearPendingResume}
               title="Don't attach this resume"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Manual Resume Banner - shows when user manually selected a PDF */}
+        {manualResume && !hasPendingResume && (
+          <div className="gogio-resume-banner">
+            <div className="gogio-resume-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                <polyline points="14,2 14,8 20,8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <line x1="10" y1="9" x2="8" y2="9"/>
+              </svg>
+            </div>
+            <div className="gogio-resume-info">
+              <span className="gogio-resume-filename">{manualResume.filename}</span>
+              <span className="gogio-resume-hint">Will attach when you add candidate</span>
+            </div>
+            <button 
+              type="button"
+              className="gogio-resume-dismiss"
+              onClick={() => setManualResume(null)}
+              title="Remove attached resume"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"/>
@@ -832,6 +921,44 @@ const [duplicateResult, setDuplicateResult] = useState<{
           />
         </div>
 
+        {/* Resume Upload Button */}
+        {!hasPendingResume && !manualResume && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: 13,
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 500,
+                color: '#6F3FF5',
+                background: '#F5F0FF',
+                border: '1px dashed #D0C0FF',
+                borderRadius: 8,
+                cursor: 'pointer',
+                marginBottom: 8,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+              </svg>
+              Attach Resume (PDF)
+            </button>
+          </>
+        )}
         {/* Submit Button */}
         <button
           type="submit"
