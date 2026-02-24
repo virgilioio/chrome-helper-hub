@@ -76,6 +76,21 @@ export interface ResumeUploadResponse {
   file_url: string;
 }
 
+export interface EnrichContactResponse {
+  success: boolean;
+  email?: string | null;
+  phone?: string | null;
+  contact_phones?: any[];
+  contact_emails?: any[];
+  title?: string | null;
+  company?: string | null;
+  credits_used?: number;
+  credits_remaining?: number;
+  error?: string;
+  error_code?: string;
+  message?: string;
+}
+
 interface ApiProxyResponse {
   ok: boolean;
   status: number;
@@ -240,6 +255,13 @@ class ApiClient {
     return this.request('resume', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  }
+
+  async enrichContact(linkedinUrl: string): Promise<EnrichContactResponse> {
+    return this.request('enrich', {
+      method: 'POST',
+      body: JSON.stringify({ linkedin_url: linkedinUrl }),
     });
   }
 }

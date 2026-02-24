@@ -593,6 +593,7 @@ const [duplicateResult, setDuplicateResult] = useState<{
                     onClick={async () => {
                       setIsFetchingContact(true);
                       try {
+                        // Step 1: Free DOM scrape
                         const contactData = await extractContactInfo();
                         let foundCount = 0;
                         
@@ -607,13 +608,49 @@ const [duplicateResult, setDuplicateResult] = useState<{
                         
                         if (foundCount > 0) {
                           toast.success(`Found ${foundCount} contact field${foundCount > 1 ? 's' : ''}`);
-                        } else if (contactData.email || contactData.phone) {
-                          toast.info('Contact info already filled');
-                        } else {
-                          toast.warning('No contact info found on profile');
+                          return;
                         }
-                      } catch (err) {
-                        toast.error('Failed to fetch contact info');
+                        
+                        if (contactData.email || contactData.phone) {
+                          toast.info('Contact info already filled');
+                          return;
+                        }
+                        
+                        // Step 2: API enrichment fallback (1 credit)
+                        if (!linkedinUrl) {
+                          toast.warning('LinkedIn URL required to fetch contact info');
+                          return;
+                        }
+                        
+                        const enrichResult = await apiClient.enrichContact(linkedinUrl);
+                        
+                        if (!enrichResult.success) {
+                          toast.warning(enrichResult.message || 'No contact info found for this profile');
+                          return;
+                        }
+                        
+                        let enrichedCount = 0;
+                        if (enrichResult.email && !email) {
+                          setEmail(enrichResult.email);
+                          enrichedCount++;
+                        }
+                        if (enrichResult.phone && !phone) {
+                          setPhone(enrichResult.phone);
+                          enrichedCount++;
+                        }
+                        
+                        if (enrichedCount > 0) {
+                          toast.success(`Found ${enrichedCount} contact field${enrichedCount > 1 ? 's' : ''}`);
+                        } else {
+                          toast.info('Contact info already filled');
+                        }
+                      } catch (err: any) {
+                        const parsed = (() => { try { return JSON.parse(err.message); } catch { return null; } })();
+                        if (parsed?.error_code === 'CREDITS_EXHAUSTED') {
+                          toast.warning('Contact lookup limit reached for this month');
+                        } else {
+                          toast.error('Failed to fetch contact info');
+                        }
                       } finally {
                         setIsFetchingContact(false);
                       }
