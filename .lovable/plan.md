@@ -1,30 +1,37 @@
 
+## Fix LinkedIn Location Extraction
 
-## Add Contact Enrichment API Fallback
+LinkedIn appears to have restructured their profile page, causing the location selectors to match the wrong element (likely grabbing connections count or other metadata instead of the actual location text).
 
-When the free LinkedIn DOM scrape finds no contact info, the extension will fall back to an API-based enrichment call (costing 1 credit) to find email/phone data.
+### Problem
+
+The current location selectors in `src/lib/profileExtractor.ts` are too broad. Selectors like `.pv-top-card .text-body-small` match the **first** `.text-body-small` element found in the container, which may now be a different piece of text (e.g., "500+ connections") due to LinkedIn reordering their DOM.
+
+### Solution
+
+Update the location extraction in `src/lib/profileExtractor.ts` to:
+
+1. **Add newer, more specific selectors** that target LinkedIn's current profile layout structure
+2. **Add a filtering step** that validates the extracted text actually looks like a location (contains comma-separated place names, not connection counts or other metadata)
+3. **Try multiple `.text-body-small` elements** instead of just the first match, checking each one against a location-like pattern
 
 ### Changes
 
-#### 1. `src/lib/api.ts` — Add enrichment interface and method
+**`src/lib/profileExtractor.ts`** -- Update location extraction logic (lines 97-106):
 
-- Add `EnrichContactResponse` interface after the existing `ResumeUploadResponse` interface (after line 77)
-- Add `enrichContact(linkedinUrl)` method to the `ApiClient` class, calling `action=enrich` via POST
+- Add new selectors targeting LinkedIn's 2025/2026 profile layout
+- Add a helper function `looksLikeLocation(text)` that filters out non-location text (e.g., text containing "connections", "followers", "mutual", numbers-only strings)
+- Change the extraction approach: instead of returning the first `.text-body-small` match, iterate through all candidates and return the first one that passes the location filter
+- Keep existing selectors as fallbacks for older profile layouts
 
-#### 2. `src/components/extension/CandidateForm.tsx` — Update Fetch Contact handler
+**`public/manifest.json`** -- Bump version to `0.2.10`
 
-Replace the existing onClick handler (lines 593-619) with the two-step logic:
-1. First attempt free DOM scrape (existing behavior)
-2. If DOM scrape finds nothing, fall back to `apiClient.enrichContact(linkedinUrl)` using the `linkedinUrl` state variable (note: the provided code references `formData?.linkedin_url` but the actual state variable in this file is `linkedinUrl`)
-3. Handle credit exhaustion errors with a user-friendly toast message
+### Technical Details
 
-#### 3. `public/manifest.json` — Bump version to 0.2.9
+The new `looksLikeLocation()` filter will reject text that:
+- Contains "connection", "follower", "mutual" (case-insensitive)
+- Is purely numeric (e.g., "500+")
+- Contains "message", "connect" (button labels)
+- Is shorter than 2 characters
 
-Reflect the new enrichment feature in the version number.
-
-### Technical Notes
-
-- `apiClient` is already imported in CandidateForm.tsx -- no new imports needed
-- The LinkedIn URL state variable is `linkedinUrl` (not `formData?.linkedin_url`), so the fallback line will use `linkedinUrl` directly
-- The enrichment endpoint (`action=enrich`) must already exist on the Supabase edge function side (handled in the GoGioATS project)
-
+The new extraction will use `querySelectorAll` on broad selectors and loop through results, returning the first element whose text passes the filter. This is resilient to DOM reordering since it doesn't depend on element position.
