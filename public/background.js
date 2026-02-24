@@ -4,7 +4,8 @@
 console.log('[GoGio][Background] Service worker started');
 
 const OAUTH_START_URL = 'https://app.gogio.io/chrome-oauth/start';
-const GATEWAY_URL = 'https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/chrome-api-gateway';
+const GATEWAY_URL = 'https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1/chrome-api-gateway';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0cnhqeHN0amZjb3pkanVtZnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MzM3MjMsImV4cCI6MjA2NTEwOTcyM30.xhhEmT2ikIqFO9IiZZC22zhWlSTC-ytBxP6EGGXtC44';
 
 // Parse token from OAuth redirect URL
 function parseTokenFromUrl(url) {
@@ -39,6 +40,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const headers = {
           'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
         };
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
