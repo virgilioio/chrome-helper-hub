@@ -1,37 +1,65 @@
 
-## Fix LinkedIn Location Extraction
 
-LinkedIn appears to have restructured their profile page, causing the location selectors to match the wrong element (likely grabbing connections count or other metadata instead of the actual location text).
+## Resume Attachment: Status and Improvements
 
-### Problem
+### Current State
 
-The current location selectors in `src/lib/profileExtractor.ts` are too broad. Selectors like `.pv-top-card .text-body-small` match the **first** `.text-body-small` element found in the container, which may now be a different piece of text (e.g., "500+ connections") due to LinkedIn reordering their DOM.
+**What works:**
+- Auto-detect LinkedIn PDF download (background.js detects it, stores metadata)
+- Purple banner shows in sidebar: "filename.pdf - Will attach when you add candidate"
+- On form submit, the PDF is read as base64 and uploaded to GoGioATS storage
+- The file appears in the candidate's attachments in the GoGioATS app
 
-### Solution
+**What's missing:**
+1. No manual file upload button -- users can ONLY attach resumes via the auto-download detection
+2. AI parsing (skills extraction, profile summary) is NOT triggered after Chrome extension upload -- the `parse-resume` and `enrich-candidate-profile` edge functions are only called from the GoGioATS web app UI, not automatically after the Chrome extension uploads
 
-Update the location extraction in `src/lib/profileExtractor.ts` to:
+### Proposed Changes
 
-1. **Add newer, more specific selectors** that target LinkedIn's current profile layout structure
-2. **Add a filtering step** that validates the extracted text actually looks like a location (contains comma-separated place names, not connection counts or other metadata)
-3. **Try multiple `.text-body-small` elements** instead of just the first match, checking each one against a location-like pattern
+#### 1. Add Manual Resume Upload Button (Chrome Extension)
 
-### Changes
+Add a file input button in `CandidateForm.tsx` that lets users pick a PDF manually, creating the same pending resume state as the auto-detection flow.
 
-**`src/lib/profileExtractor.ts`** -- Update location extraction logic (lines 97-106):
+**File: `src/components/extension/CandidateForm.tsx`**
+- Add a hidden `<input type="file" accept=".pdf">` element
+- Add an "Attach Resume" button (styled like the Fetch Contact button) below the Notes card
+- When a file is selected, read it as base64, store it in component state as a "manual resume"
+- On submit, upload it the same way as auto-detected resumes
+- Show the same purple banner when a manual resume is queued
 
-- Add new selectors targeting LinkedIn's 2025/2026 profile layout
-- Add a helper function `looksLikeLocation(text)` that filters out non-location text (e.g., text containing "connections", "followers", "mutual", numbers-only strings)
-- Change the extraction approach: instead of returning the first `.text-body-small` match, iterate through all candidates and return the first one that passes the location filter
-- Keep existing selectors as fallbacks for older profile layouts
+#### 2. Trigger AI Parsing After Resume Upload (Backend)
 
-**`public/manifest.json`** -- Bump version to `0.2.10`
+After the Chrome extension uploads a resume, the gateway should trigger the `parse-resume` and `enrich-candidate-profile` edge functions automatically.
+
+**File: `supabase/functions/chrome-api-gateway/index.ts`** (in the GoGioATS project)
+- After successful resume upload in `handleResume()`, invoke `parse-resume` and `enrich-candidate-profile` in a fire-and-forget pattern
+- This ensures skills, work experience, education, and AI summary are extracted just like when uploading from the web app
+
+#### 3. Version Bump
+
+**File: `public/manifest.json`**
+- Bump version to `0.2.11`
 
 ### Technical Details
 
-The new `looksLikeLocation()` filter will reject text that:
-- Contains "connection", "follower", "mutual" (case-insensitive)
-- Is purely numeric (e.g., "500+")
-- Contains "message", "connect" (button labels)
-- Is shorter than 2 characters
+**Manual upload approach:**
+- Use a `useRef<HTMLInputElement>` for the hidden file input
+- On file select, read the file using `FileReader.readAsArrayBuffer`, convert to base64
+- Store `{ filename, data, size }` in component state
+- The submit handler already supports resume upload -- we just need to feed it the manual file data instead of calling `readDownloadedFile()`
+- The purple banner component already exists and just needs to respond to the manual resume state too
 
-The new extraction will use `querySelectorAll` on broad selectors and loop through results, returning the first element whose text passes the filter. This is resilient to DOM reordering since it doesn't depend on element position.
+**AI parsing trigger (GoGioATS side):**
+- After the `candidate_attachments` insert succeeds, extract text from the PDF using the existing `parse-resume` function
+- Then call `enrich-candidate-profile` with the parsed text to generate skills, summary, etc.
+- Both calls should be fire-and-forget (non-blocking) so the extension gets an immediate response
+- Uses `fetch()` to invoke the Supabase functions internally from the gateway
+
+### Changes Summary
+
+| File | Project | Change |
+|------|---------|--------|
+| `src/components/extension/CandidateForm.tsx` | Chrome Extension | Add manual "Attach Resume" file picker button |
+| `supabase/functions/chrome-api-gateway/index.ts` | GoGioATS | Trigger parse-resume + enrich after upload |
+| `public/manifest.json` | Chrome Extension | Bump to 0.2.11 |
+
