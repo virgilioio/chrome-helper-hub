@@ -4,7 +4,8 @@
 import { isContentScriptContext } from '@/lib/oauthBridge';
 import { isExtensionContextValid } from '@/lib/chromeApi';
 
-const GATEWAY_URL = 'https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/chrome-api-gateway';
+const GATEWAY_URL = 'https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1/chrome-api-gateway';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0cnhqeHN0amZjb3pkanVtZnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MzM3MjMsImV4cCI6MjA2NTEwOTcyM30.xhhEmT2ikIqFO9IiZZC22zhWlSTC-ytBxP6EGGXtC44';
 
 export interface Organization {
   id: string;
@@ -189,6 +190,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`,
+        'apikey': SUPABASE_ANON_KEY,
         ...options.headers,
       },
     });
