@@ -35,6 +35,56 @@ function getTextFromSelectors(selectors: string[], label: string): string | null
 }
 
 /**
+ * Check if a text string looks like a geographic location
+ * Filters out connection counts, button labels, and other non-location metadata
+ */
+function looksLikeLocation(text: string): boolean {
+  if (!text || text.length < 2) return false;
+  const lower = text.toLowerCase();
+  // Reject LinkedIn metadata
+  if (/connection|follower|mutual|message|\bconnect\b/i.test(lower)) return false;
+  // Reject purely numeric strings like "500+"
+  if (/^\d[\d,+.\s]*$/.test(text.trim())) return false;
+  // Reject very short single-word strings that are likely labels
+  if (text.length < 3 && !text.includes(',')) return false;
+  return true;
+}
+
+/**
+ * Extract location by trying multiple selectors and filtering candidates
+ * Uses querySelectorAll to check all matches, not just the first
+ */
+function extractLocation(): string | null {
+  const selectors = [
+    '.pv-top-card--list-bullet .text-body-small',
+    '.pb2 .text-body-small',
+    '.pv-top-card .text-body-small',
+    '.ph5 .text-body-small',
+    'span.text-body-small.inline.t-black--light.break-words',
+    '.pv-text-details__left-panel .text-body-small.inline',
+    'span.text-body-small[class*="t-black--light"]',
+    '.text-body-small',
+  ];
+
+  for (const selector of selectors) {
+    try {
+      const elements = document.querySelectorAll(selector);
+      for (const el of elements) {
+        const text = el?.textContent?.trim() || '';
+        if (text && looksLikeLocation(text)) {
+          console.log(`[GoGio][Extract] Location matched: "${selector}" → "${text.substring(0, 60)}"`);
+          return text;
+        }
+      }
+    } catch (e) {
+      // Invalid selector, skip
+    }
+  }
+  console.log('[GoGio][Extract] Location: no selector matched');
+  return null;
+}
+
+/**
  * Parse headline for role and company as fallback
  * Handles patterns like:
  * - "Software Engineer at Google"
@@ -94,16 +144,8 @@ export function extractProfileData(): LinkedInProfileData {
     '[data-generated-suggestion-target]',
   ], 'Headline');
 
-  // Location selectors
-  const location = getTextFromSelectors([
-    '.pv-top-card--list-bullet .text-body-small',
-    '.pb2 .text-body-small',
-    '.pv-top-card .text-body-small',
-    '.ph5 .text-body-small',
-    'span.text-body-small.inline.t-black--light.break-words',
-    '.pv-text-details__left-panel .text-body-small.inline',
-    'span.text-body-small[class*="t-black--light"]',
-  ], 'Location');
+  // Location - uses filtering to avoid grabbing connection counts or other metadata
+  const location = extractLocation();
 
   // Experience section for current role/company
   let currentCompany: string | null = null;
