@@ -2,40 +2,43 @@
 
 ## Fix "Project not specified" 400 Error
 
-### Root Cause
+### What's Wrong
 
-The extension's API URL uses the **Lovable project ID** (`aba41743-...`) in a Lovable Cloud proxy domain (`*.functions.supabase.co`). This proxy can no longer route the request to your Supabase project, returning "Project not specified" at the infrastructure level -- before the edge function code ever runs.
+I checked the [GoGioATS](/projects/aba41743-9dfe-4b0e-88f2-0c24aeb910c4) main app project and confirmed:
+- The edge function `chrome-api-gateway` is correctly configured with `verify_jwt = false`
+- The function code is fine and handles its own authentication
+- CORS is set up to allow Chrome extension origins
 
-The actual Supabase project ref is `etrxjxstjfcozdjumfsj`. The edge function code and its `verify_jwt = false` config are both correct -- this is purely a URL routing issue.
+The problem is the **URL** the extension uses to call the API. The extension currently calls:
+```
+https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/chrome-api-gateway
+```
+This is a **Lovable Cloud proxy URL** that no longer routes correctly to your Supabase project, returning "Project not specified" before your function code ever runs.
 
-### Fix: Switch to Direct Supabase URL + Add apikey Header
+Your actual Supabase project ref is `etrxjxstjfcozdjumfsj` (confirmed from `supabase/config.toml` in the main app).
 
-We'll update the GATEWAY_URL to go directly to Supabase (bypassing the Lovable proxy) and include the required `apikey` header for project identification.
+### The Fix
 
-**New URL:** `https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1/chrome-api-gateway`
+Switch to the direct Supabase edge function URL and add the required `apikey` header. No backend changes needed -- the edge function is working fine.
 
-### Changes
+### Changes (3 files)
 
-**1. `src/lib/api.ts`** -- Update GATEWAY_URL and add apikey header to direct fetch
-
-- Change `GATEWAY_URL` from `https://aba41743-9dfe-4b0e-88f2-0c24aeb910c4.functions.supabase.co/chrome-api-gateway` to `https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1/chrome-api-gateway`
+**1. `src/lib/api.ts`**
+- Change `GATEWAY_URL` to `https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1/chrome-api-gateway`
+- Add a `SUPABASE_ANON_KEY` constant
 - Add `apikey` header to the direct fetch path (popup context)
 
-**2. `public/background.js`** -- Update GATEWAY_URL and add apikey header to proxy fetch
-
-- Change `GATEWAY_URL` to the direct Supabase URL
+**2. `public/background.js`**
+- Change `GATEWAY_URL` to `https://etrxjxstjfcozdjumfsj.supabase.co/functions/v1/chrome-api-gateway`
+- Add `SUPABASE_ANON_KEY` constant
 - Add `apikey` header to the proxy fetch
 
-**3. `public/manifest.json`** -- Update host_permissions
-
+**3. `public/manifest.json`**
 - Add `https://etrxjxstjfcozdjumfsj.supabase.co/*` to `host_permissions`
-- Keep the old `*.supabase.co` permission for backward compatibility, or replace it
 
-### Technical Details
+### Why This Is Safe
 
-The Supabase anon key (`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0cnhqeHN0amZjb3pkanVtZnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MzM3MjMsImV4cCI6MjA2NTEwOTcyM30.xhhEmT2ikIqFO9IiZZC22zhWlSTC-ytBxP6EGGXtC44`) is a **publishable** key -- it's safe to include in client-side code. It's already public in the GoGioATS web app.
-
-The `apikey` header tells Supabase which project the request belongs to. Combined with the project ref in the URL, this ensures proper routing even with `verify_jwt = false`.
+The Supabase anon key is a **publishable** key -- it's already public in the GoGioATS web app. It just tells the Supabase gateway which project the request belongs to. The actual security comes from the GoGio token validated inside the edge function.
 
 ### After Applying
 
