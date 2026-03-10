@@ -889,7 +889,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
             </div>
 
             {/* Location */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div>
                 <label className="gogio-label">
                   <MapPin style={{ width: 12, height: 12 }} /> City
@@ -899,6 +899,19 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   placeholder="San Francisco"
+                  className="gogio-input"
+                  style={{ height: 36 }}
+                />
+              </div>
+              <div>
+                <label className="gogio-label">
+                  State / Region
+                </label>
+                <input
+                  type="text"
+                  value={locationState}
+                  onChange={(e) => setLocationState(e.target.value)}
+                  placeholder="California"
                   className="gogio-input"
                   style={{ height: 36 }}
                 />
