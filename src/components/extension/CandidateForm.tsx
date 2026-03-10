@@ -266,7 +266,11 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     };
 
     fetchLinkedInData();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      cleanupReactive?.();
+      cleanupAbort?.();
+    };
   }, []); // Run once on mount
 
   // Pre-submission duplicate lookup when LinkedIn URL is set
