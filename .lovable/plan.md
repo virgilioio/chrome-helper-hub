@@ -1,22 +1,19 @@
 
 
-# Fix: Pronouns Leaking into Location Field
+## Move Resume Attachment to Candidate Information Section
 
-## Problem
-The `looksLikeLocation()` function in `profileExtractor.ts` doesn't filter out pronoun text like "(He/Him)", "(She/Her)", etc. These short strings pass all current checks and get matched by the near-h1 scan (Strategy 1 in `extractLocationField`), ending up in the City field after comma-splitting.
+### What changes
 
-## State Field UI
-The State/Region field is **already implemented** — 3-column grid with City, State/Region, Country is in place (line 894). No UI changes needed.
+Move the "Attach Resume (PDF)" button and the resume status banners (both auto-detected and manual) from their current position below the Notes card up into the **Candidate Information** card, right after the City/Country row.
 
-## Fix: `src/lib/profileExtractor.ts`
+### File: `src/components/extension/CandidateForm.tsx`
 
-**`looksLikeLocation()` (line 54-61)** — Add a pronoun/parenthetical filter:
-- Reject text matching pronoun patterns: `/(he|him|she|her|they|them|ze|hir)/i` when wrapped in parentheses
-- Reject any text that is entirely wrapped in parentheses (these are never locations)
-- Add to the existing blocklist regex: pronouns pattern
+1. **Remove** the resume upload button block (lines 924-961) from its current location below the Notes card
+2. **Remove** the auto-detected resume banner (lines 508-537) and manual resume banner (lines 539-567) from their current position at the top of the form
+3. **Add all three elements** (auto-detected banner, manual banner, upload button + hidden file input) inside the Candidate Information card (after line 841, right after the City/Country grid and before the closing `</div>` of the card)
 
-**`extractLocationField()` Strategy 1 (line 289)** — Add additional guard:
-- Skip elements whose text starts with `(` (parenthetical annotations are never locations)
+This keeps everything resume-related grouped together in the most visible section, right where users are looking at candidate details. The banners will appear inline within the card rather than floating at the top, and the upload button sits naturally alongside the other candidate fields.
 
-Two small additions, no structural changes needed.
+### No other files change
 
+Version bump is not needed since this is a UI-only repositioning within the same component.

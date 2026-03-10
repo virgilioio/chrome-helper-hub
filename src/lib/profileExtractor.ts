@@ -53,10 +53,15 @@ function cleanName(text: string | null): string | null {
 
 function looksLikeLocation(text: string): boolean {
   if (!text || text.length < 2) return false;
-  const lower = text.toLowerCase();
+  const trimmed = text.trim();
+  // Reject text entirely wrapped in parentheses (pronouns, annotations)
+  if (/^\(.*\)$/.test(trimmed)) return false;
+  // Reject pronoun patterns even without parentheses
+  if (/\b(he|him|she|her|they|them|ze|hir)\b/i.test(trimmed) && trimmed.includes('/')) return false;
+  const lower = trimmed.toLowerCase();
   if (/connection|follower|mutual|message|\bconnect\b/i.test(lower)) return false;
-  if (/^\d[\d,+.\s]*$/.test(text.trim())) return false;
-  if (text.length < 3 && !text.includes(',')) return false;
+  if (/^\d[\d,+.\s]*$/.test(trimmed)) return false;
+  if (trimmed.length < 3 && !trimmed.includes(',')) return false;
   return true;
 }
 
@@ -290,6 +295,7 @@ function extractLocationField(): StrategyResult[] {
           if (el.contains(h1) || h1.contains(el)) continue;
           const text = cleanText(el);
           if (!text || text.length >= 100 || text.length < 3) continue;
+          if (text.startsWith('(')) continue;
           // Skip if it matches name or headline-like content
           if (extractedName && text === extractedName) continue;
           if (locationBlocklist.test(text)) continue;
