@@ -3,7 +3,7 @@ import { SidebarSearchableSelect } from './SidebarSearchableSelect';
 import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
 import { getLinkedInUrl } from '@/lib/chromeStorage';
-import { apiClient, CandidatePayload } from '@/lib/api';
+import { apiClient, CandidatePayload, LookupCandidateResponse } from '@/lib/api';
 import { extractProfileData, extractProfileDataWithRetry, extractContactInfo, isLinkedInProfilePage } from '@/lib/profileExtractor';
 import { isContentScriptContext } from '@/lib/oauthBridge';
 import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
