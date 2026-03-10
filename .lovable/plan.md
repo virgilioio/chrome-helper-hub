@@ -1,19 +1,29 @@
 
 
-## Move Resume Attachment to Candidate Information Section
+# Add `location_state` field to Chrome Extension
 
-### What changes
+## Changes
 
-Move the "Attach Resume (PDF)" button and the resume status banners (both auto-detected and manual) from their current position below the Notes card up into the **Candidate Information** card, right after the City/Country row.
+### 1. `src/lib/api.ts` (line 44)
+Add `location_state: string` between `location_city` and `location_country` in the `CandidatePayload` interface.
 
-### File: `src/components/extension/CandidateForm.tsx`
+### 2. `src/components/extension/CandidateForm.tsx`
 
-1. **Remove** the resume upload button block (lines 924-961) from its current location below the Notes card
-2. **Remove** the auto-detected resume banner (lines 508-537) and manual resume banner (lines 539-567) from their current position at the top of the form
-3. **Add all three elements** (auto-detected banner, manual banner, upload button + hidden file input) inside the Candidate Information card (after line 841, right after the City/Country grid and before the closing `</div>` of the card)
+**New state** (after line 96):
+- Add `const [state, setState] = useState('');`
 
-This keeps everything resume-related grouped together in the most visible section, right where users are looking at candidate details. The banners will appear inline within the card rather than floating at the top, and the upload button sits naturally alongside the other candidate fields.
+**Location parsing** (lines 261-269) — replace with 3-part handling:
+- 3 parts (`"City, State, Country"`) → city, state, country
+- 2 parts (`"City, Country"`) → city, country (state empty)
+- 1 part → country only
 
-### No other files change
+**Location grid UI** (lines 884-912) — change from 2-column to 3-column grid:
+- City | State/Region | Country
+- State field uses a generic label like "State / Region"
 
-Version bump is not needed since this is a UI-only repositioning within the same component.
+**Submission payload** (line 358) — add `location_state: state.trim()` between `location_city` and `location_country`.
+
+**Reset** — if there's a form reset function, include `setState('')`.
+
+Raw LinkedIn text is sent as-is; backend handles normalization.
+
