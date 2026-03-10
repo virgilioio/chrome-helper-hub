@@ -41,6 +41,7 @@ export interface CandidatePayload {
   company_current: string;
   role_current: string;
   location_city: string;
+  location_state: string;
   location_country: string;
   profile_summary: string;
   skills: string[];

@@ -93,6 +93,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   const [currentCompany, setCurrentCompany] = useState('');
   const [currentRole, setCurrentRole] = useState('');
   const [city, setCity] = useState('');
+  const [locationState, setLocationState] = useState('');
   const [country, setCountry] = useState('');
   const [summary, setSummary] = useState('');
   const [skills, setSkills] = useState('');
@@ -260,11 +261,16 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
 
       if (location) {
         const parts = location.split(',').map((p: string) => p.trim());
-        if (parts.length >= 2 && (!city && !country || stable)) {
+        if (parts.length >= 3 && (!city && !country || stable)) {
           setCity(parts[0]);
-          setCountry(parts.slice(1).join(', '));
-        } else if (parts.length === 1 && (!city || stable)) {
+          setLocationState(parts[1]);
+          setCountry(parts[2]);
+        } else if (parts.length === 2 && (!city && !country || stable)) {
           setCity(parts[0]);
+          setLocationState('');
+          setCountry(parts[1]);
+        } else if (parts.length === 1 && (!country || stable)) {
+          setCountry(parts[0]);
         }
       }
 
@@ -319,6 +325,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     setCurrentCompany('');
     setCurrentRole('');
     setCity('');
+    setLocationState('');
     setCountry('');
     setSummary('');
     setSkills('');
@@ -355,6 +362,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
       company_current: currentCompany.trim(),
       role_current: currentRole.trim(),
       location_city: city.trim(),
+      location_state: locationState.trim(),
       location_country: country.trim(),
       profile_summary: summary.trim(),
       skills: skills.trim() ? skills.split(',').map(s => s.trim()).filter(Boolean) : [],
@@ -435,6 +443,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
       setCurrentCompany('');
       setCurrentRole('');
       setCity('');
+      setLocationState('');
       setCountry('');
       setSummary('');
       setSkills('');
@@ -882,7 +891,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
             </div>
 
             {/* Location */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div>
                 <label className="gogio-label">
                   <MapPin style={{ width: 12, height: 12 }} /> City
@@ -892,6 +901,19 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   placeholder="San Francisco"
+                  className="gogio-input"
+                  style={{ height: 36 }}
+                />
+              </div>
+              <div>
+                <label className="gogio-label">
+                  State / Region
+                </label>
+                <input
+                  type="text"
+                  value={locationState}
+                  onChange={(e) => setLocationState(e.target.value)}
+                  placeholder="California"
                   className="gogio-input"
                   style={{ height: 36 }}
                 />
