@@ -174,14 +174,18 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     const fetchLinkedInData = async () => {
       // Check if we're in content script context (sidebar on LinkedIn)
       if (isContentScriptContext()) {
-        // We're in the sidebar - directly extract from DOM with retry
+        // We're in the sidebar - use reactive extraction with MutationObserver
         if (isLinkedInProfilePage()) {
-          console.log('[GoGio] Sidebar context - extracting profile data with retry');
-          const data = await extractProfileDataWithRetry();
-          if (!cancelled) {
-            applyProfileData(data);
-            console.log('[GoGio] Autofill complete:', { hasName: !!data.fullName, hasLocation: !!data.location });
-          }
+          console.log('[GoGio] Sidebar context - starting reactive profile extraction');
+          const abortController = new AbortController();
+          cleanupReactive = extractProfileDataReactive((data, stable) => {
+            if (!cancelled) {
+              applyProfileData(data);
+              console.log('[GoGio] Autofill update:', { hasName: !!data.fullName, stable });
+            }
+          }, abortController.signal);
+          // Store abort for cleanup
+          cleanupAbort = () => abortController.abort();
         }
       } else {
         // We're in popup - use message passing
