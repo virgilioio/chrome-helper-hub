@@ -182,7 +182,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           const abortController = new AbortController();
           cleanupReactive = extractProfileDataReactive((data, stable) => {
             if (!cancelled) {
-              applyProfileData(data);
+              applyProfileData(data, stable);
               console.log('[GoGio] Autofill update:', { hasName: !!data.fullName, stable });
             }
           }, abortController.signal);
