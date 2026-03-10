@@ -125,7 +125,7 @@ function extractFullName(): StrategyResult[] {
       const sections = mainEl.querySelectorAll('section');
       for (const section of sections) {
         const h1 = section.querySelector('h1');
-        const text = cleanText(h1);
+        const text = cleanName(cleanText(h1));
         if (text && looksLikeName(text)) {
           results.push({ value: text, source: 'main-section-h1', confidence: 0.95 });
           break;
@@ -134,7 +134,7 @@ function extractFullName(): StrategyResult[] {
       // Also try direct h1 child of main
       if (!results.length) {
         const h1 = mainEl.querySelector('h1');
-        const text = cleanText(h1);
+        const text = cleanName(cleanText(h1));
         if (text && looksLikeName(text)) {
           results.push({ value: text, source: 'main-h1', confidence: 0.9 });
         }
