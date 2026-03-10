@@ -273,28 +273,33 @@ function extractHeadline(): StrategyResult[] {
 function extractLocationField(): StrategyResult[] {
   const results: StrategyResult[] = [];
 
+  // Blocklist for location scan
+  const locationBlocklist = /\bconnection|follower|mutual|message|\bmore\b|\bconnect\b/i;
+
   // Strategy 1: walk elements near the h1, find location-like text
   try {
     const mainEl = document.querySelector('main');
     const h1 = mainEl?.querySelector('h1');
     if (h1) {
-      // Walk up to the top-card container, then scan all small text elements
-      const container = h1.closest('section') || h1.closest('div[class]') || mainEl;
+      // Narrow scan: only within the h1's parent container (intro card), not entire section
+      const container = h1.parentElement?.parentElement || h1.closest('div[class]');
       if (container) {
         const textEls = container.querySelectorAll('span, div');
+        const extractedName = cleanName(cleanText(h1));
         for (const el of textEls) {
-          // Skip elements that are or contain the h1
           if (el.contains(h1) || h1.contains(el)) continue;
           const text = cleanText(el);
-          if (text && looksLikeLocation(text) && text.length < 100) {
-            // Validate: should have comma or look geographic
-            const hasComma = text.includes(',');
-            const hasGeoWords = /\b(area|region|city|metro|greater|county|state|province)\b/i.test(text);
-            const looksGeo = hasComma || hasGeoWords || /^[A-Z][a-z]/.test(text);
-            if (looksGeo) {
-              results.push({ value: text, source: 'near-h1-scan', confidence: 0.7 });
-              break;
-            }
+          if (!text || text.length >= 100 || text.length < 3) continue;
+          // Skip if it matches name or headline-like content
+          if (extractedName && text === extractedName) continue;
+          if (locationBlocklist.test(text)) continue;
+          if (!looksLikeLocation(text)) continue;
+          const hasComma = text.includes(',');
+          const hasGeoWords = /\b(area|region|city|metro|greater|county|state|province)\b/i.test(text);
+          const looksGeo = hasComma || hasGeoWords || /^[A-Z][a-z]/.test(text);
+          if (looksGeo) {
+            results.push({ value: text, source: 'near-h1-scan', confidence: 0.7 });
+            break;
           }
         }
       }
