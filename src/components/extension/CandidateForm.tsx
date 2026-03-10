@@ -263,6 +263,34 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     return () => { cancelled = true; };
   }, []); // Run once on mount
 
+  // Pre-submission duplicate lookup when LinkedIn URL is set
+  useEffect(() => {
+    if (!linkedinUrl || linkedinUrl.length < 10) {
+      setLookupResult(null);
+      return;
+    }
+
+    let cancelled = false;
+    const doLookup = async () => {
+      setIsLookingUp(true);
+      try {
+        const result = await apiClient.lookupCandidate(linkedinUrl, email || undefined);
+        if (!cancelled) {
+          setLookupResult(result.exists ? result : null);
+        }
+      } catch (err) {
+        console.log('[GoGio] Lookup failed (non-critical):', err);
+        if (!cancelled) setLookupResult(null);
+      } finally {
+        if (!cancelled) setIsLookingUp(false);
+      }
+    };
+
+    // Debounce lookup
+    const timer = setTimeout(doLookup, 1000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [linkedinUrl]);
+
   const resetForm = () => {
     setFirstName('');
     setLastName('');
