@@ -304,6 +304,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     setSkills('');
     setNotes('');
     setDuplicateResult(null);
+    setLookupResult(null);
     setManualResume(null);
     // Keep linkedinUrl as user might add multiple from same profile
   };
