@@ -295,6 +295,7 @@ function extractLocationField(): StrategyResult[] {
           if (el.contains(h1) || h1.contains(el)) continue;
           const text = cleanText(el);
           if (!text || text.length >= 100 || text.length < 3) continue;
+          if (text.startsWith('(')) continue;
           // Skip if it matches name or headline-like content
           if (extractedName && text === extractedName) continue;
           if (locationBlocklist.test(text)) continue;
