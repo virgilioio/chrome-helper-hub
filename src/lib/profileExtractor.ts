@@ -201,6 +201,9 @@ function extractFullName(): StrategyResult[] {
 function extractHeadline(): StrategyResult[] {
   const results: StrategyResult[] = [];
 
+  // Blocklist for headline candidates
+  const headlineBlocklist = /\bconnection|follower|mutual|message\b/i;
+
   // Strategy 1: sibling of h1 in main — walk from name h1 to next text element
   try {
     const mainEl = document.querySelector('main');
@@ -209,9 +212,11 @@ function extractHeadline(): StrategyResult[] {
       // Walk siblings and parent's siblings
       let candidate = h1.nextElementSibling;
       for (let i = 0; i < 5 && candidate; i++) {
-        const text = cleanText(candidate);
-        if (text && text.length > 10 && text.length < 300 && !looksLikeLocation(text)) {
-          results.push({ value: text, source: 'h1-sibling', confidence: 0.85 });
+        // Prefer direct child text node or first div's text to avoid grabbing entire containers
+        const directDiv = candidate.querySelector('div');
+        const rawText = directDiv ? cleanText(directDiv) : cleanText(candidate);
+        if (rawText && rawText.length > 10 && rawText.length < 150 && !headlineBlocklist.test(rawText) && !looksLikeLocation(rawText)) {
+          results.push({ value: rawText, source: 'h1-sibling', confidence: 0.85 });
           break;
         }
         candidate = candidate.nextElementSibling;
@@ -223,9 +228,10 @@ function extractHeadline(): StrategyResult[] {
         if (parentDiv) {
           let nextDiv = parentDiv.nextElementSibling;
           for (let i = 0; i < 3 && nextDiv; i++) {
-            const text = cleanText(nextDiv);
-            if (text && text.length > 10 && text.length < 300) {
-              results.push({ value: text, source: 'h1-parent-sibling', confidence: 0.8 });
+            const directDiv = nextDiv.querySelector('div');
+            const rawText = directDiv ? cleanText(directDiv) : cleanText(nextDiv);
+            if (rawText && rawText.length > 10 && rawText.length < 150 && !headlineBlocklist.test(rawText)) {
+              results.push({ value: rawText, source: 'h1-parent-sibling', confidence: 0.8 });
               break;
             }
             nextDiv = nextDiv.nextElementSibling;
