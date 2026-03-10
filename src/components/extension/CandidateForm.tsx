@@ -4,7 +4,7 @@ import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
 import { getLinkedInUrl } from '@/lib/chromeStorage';
 import { apiClient, CandidatePayload, LookupCandidateResponse } from '@/lib/api';
-import { extractProfileData, extractProfileDataWithRetry, extractContactInfo, isLinkedInProfilePage } from '@/lib/profileExtractor';
+import { extractProfileData, extractProfileDataReactive, extractContactInfo, isLinkedInProfilePage } from '@/lib/profileExtractor';
 import { isContentScriptContext } from '@/lib/oauthBridge';
 import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
 import { toast } from 'sonner';
@@ -170,18 +170,24 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   // Auto-fill from LinkedIn profile
   useEffect(() => {
     let cancelled = false;
+    let cleanupReactive: (() => void) | null = null;
+    let cleanupAbort: (() => void) | null = null;
 
     const fetchLinkedInData = async () => {
       // Check if we're in content script context (sidebar on LinkedIn)
       if (isContentScriptContext()) {
-        // We're in the sidebar - directly extract from DOM with retry
+        // We're in the sidebar - use reactive extraction with MutationObserver
         if (isLinkedInProfilePage()) {
-          console.log('[GoGio] Sidebar context - extracting profile data with retry');
-          const data = await extractProfileDataWithRetry();
-          if (!cancelled) {
-            applyProfileData(data);
-            console.log('[GoGio] Autofill complete:', { hasName: !!data.fullName, hasLocation: !!data.location });
-          }
+          console.log('[GoGio] Sidebar context - starting reactive profile extraction');
+          const abortController = new AbortController();
+          cleanupReactive = extractProfileDataReactive((data, stable) => {
+            if (!cancelled) {
+              applyProfileData(data);
+              console.log('[GoGio] Autofill update:', { hasName: !!data.fullName, stable });
+            }
+          }, abortController.signal);
+          // Store abort for cleanup
+          cleanupAbort = () => abortController.abort();
         }
       } else {
         // We're in popup - use message passing
@@ -260,7 +266,11 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     };
 
     fetchLinkedInData();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      cleanupReactive?.();
+      cleanupAbort?.();
+    };
   }, []); // Run once on mount
 
   // Pre-submission duplicate lookup when LinkedIn URL is set
@@ -289,7 +299,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     // Debounce lookup
     const timer = setTimeout(doLookup, 1000);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [linkedinUrl]);
+  }, [linkedinUrl, email]);
 
   const resetForm = () => {
     setFirstName('');
