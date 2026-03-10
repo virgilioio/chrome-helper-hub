@@ -264,6 +264,25 @@ class ApiClient {
       body: JSON.stringify({ linkedin_url: linkedinUrl }),
     });
   }
+
+  async lookupCandidate(linkedinUrl?: string, email?: string): Promise<LookupCandidateResponse> {
+    return this.request('lookup', {
+      method: 'POST',
+      body: JSON.stringify({ linkedin_url: linkedinUrl, email }),
+    });
+  }
+}
+
+export interface LookupCandidateResponse {
+  exists: boolean;
+  candidate_id?: string;
+  candidate_name?: string;
+  candidate_url?: string;
+  current_jobs?: Array<{
+    job_title: string;
+    stage_name: string;
+    candidate_url: string;
+  }>;
 }
 
 export const apiClient = new ApiClient();

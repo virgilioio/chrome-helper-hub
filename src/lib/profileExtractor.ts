@@ -21,7 +21,9 @@ function getTextFromSelectors(selectors: string[], label: string): string | null
   for (const selector of selectors) {
     try {
       const el = document.querySelector(selector);
-      const text = el?.textContent?.trim() || null;
+      if (!el) continue;
+      // Prefer innerText (visible text only) over textContent (includes hidden/SR text)
+      const text = (el as HTMLElement).innerText?.trim() || el.textContent?.trim() || null;
       if (text) {
         console.log(`[GoGio][Extract] ${label} matched: "${selector}" → "${text.substring(0, 60)}"`);
         return text;
@@ -63,6 +65,9 @@ function extractLocation(): string | null {
     'span.text-body-small.inline.t-black--light.break-words',
     '.pv-text-details__left-panel .text-body-small.inline',
     'span.text-body-small[class*="t-black--light"]',
+    // New: broader structural selectors for 2025+ LinkedIn layout
+    'main section:first-of-type .text-body-small',
+    'main [class*="top-card"] .text-body-small',
     '.text-body-small',
   ];
 
@@ -70,7 +75,7 @@ function extractLocation(): string | null {
     try {
       const elements = document.querySelectorAll(selector);
       for (const el of elements) {
-        const text = el?.textContent?.trim() || '';
+        const text = (el as HTMLElement).innerText?.trim() || el?.textContent?.trim() || '';
         if (text && looksLikeLocation(text)) {
           console.log(`[GoGio][Extract] Location matched: "${selector}" → "${text.substring(0, 60)}"`);
           return text;
@@ -116,6 +121,33 @@ function parseHeadlineForRoleCompany(headline: string | null): { role: string | 
 }
 
 /**
+ * Extract the name using structural DOM walking as a last resort
+ * LinkedIn always has the name as the first h1 inside the main profile section
+ */
+function extractNameFallback(): string | null {
+  try {
+    // Walk from main > first section > find h1
+    const mainEl = document.querySelector('main');
+    if (!mainEl) return null;
+    
+    const sections = mainEl.querySelectorAll('section');
+    for (const section of sections) {
+      const h1 = section.querySelector('h1');
+      if (h1) {
+        const text = (h1 as HTMLElement).innerText?.trim() || h1.textContent?.trim() || '';
+        if (text && text.length > 1 && text.length < 100) {
+          console.log(`[GoGio][Extract] Name from structural walk: "${text}"`);
+          return text;
+        }
+      }
+    }
+  } catch (e) {
+    // silently fail
+  }
+  return null;
+}
+
+/**
  * Extract profile data from the current LinkedIn page DOM
  * Works in both content script and sidebar context since both have access to the same DOM
  */
@@ -123,8 +155,9 @@ export function extractProfileData(): LinkedInProfileData {
   console.log('[GoGio][Extract] Starting profile extraction...');
 
   // Name selectors - broadest partial-match first, then structural, then exact legacy
-  const fullName = getTextFromSelectors([
+  let fullName = getTextFromSelectors([
     'h1[class*="text-heading"]',
+    'main section:first-of-type h1',
     '.pv-top-card h1',
     '.ph5 h1',
     'h1.text-heading-xlarge',
@@ -134,10 +167,16 @@ export function extractProfileData(): LinkedInProfileData {
     'h1',
   ], 'Name');
 
+  // Structural fallback for name
+  if (!fullName) {
+    fullName = extractNameFallback();
+  }
+
   // Headline selectors
   const headline = getTextFromSelectors([
     '.pv-top-card .text-body-medium',
     '.ph5 .text-body-medium',
+    'main section:first-of-type .text-body-medium',
     '.text-body-medium',
     'div.text-body-medium.break-words',
     '.pv-text-details__left-panel .text-body-medium',
@@ -192,7 +231,7 @@ export function extractProfileData(): LinkedInProfileData {
           firstExp.querySelector('.t-bold > span') ||
           firstExp.querySelector('span.t-bold');
         
-        currentRole = roleEl?.textContent?.trim() || null;
+        currentRole = roleEl ? ((roleEl as HTMLElement).innerText?.trim() || roleEl.textContent?.trim() || null) : null;
         if (currentRole) {
           console.log('[GoGio][Extract] Role:', currentRole);
         }
@@ -207,7 +246,7 @@ export function extractProfileData(): LinkedInProfileData {
         
         if (companyEl) {
           // Company text might include " · Full-time", clean it up
-          const companyText = companyEl.textContent?.trim() || '';
+          const companyText = (companyEl as HTMLElement).innerText?.trim() || companyEl.textContent?.trim() || '';
           currentCompany = companyText.split('·')[0].trim() || null;
           if (currentCompany) {
             console.log('[GoGio][Extract] Company:', currentCompany);
@@ -271,7 +310,7 @@ export function extractProfileData(): LinkedInProfileData {
  * Attempts extraction up to 3 times with increasing delays
  */
 export async function extractProfileDataWithRetry(): Promise<LinkedInProfileData> {
-  const delays = [500, 1500, 3000];
+  const delays = [800, 1500, 3000];
 
   for (let attempt = 0; attempt < delays.length; attempt++) {
     await new Promise(resolve => setTimeout(resolve, delays[attempt]));

@@ -3,7 +3,7 @@ import { SidebarSearchableSelect } from './SidebarSearchableSelect';
 import { GoGioLogo } from './GoGioLogo';
 import { useDropdownData } from '@/hooks/useDropdownData';
 import { getLinkedInUrl } from '@/lib/chromeStorage';
-import { apiClient, CandidatePayload } from '@/lib/api';
+import { apiClient, CandidatePayload, LookupCandidateResponse } from '@/lib/api';
 import { extractProfileData, extractProfileDataWithRetry, extractContactInfo, isLinkedInProfilePage } from '@/lib/profileExtractor';
 import { isContentScriptContext } from '@/lib/oauthBridge';
 import { sendMessageToActiveTab, getActiveTabUrl } from '@/lib/chromeApi';
@@ -97,11 +97,14 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   const [summary, setSummary] = useState('');
   const [skills, setSkills] = useState('');
   const [notes, setNotes] = useState('');
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingContact, setIsFetchingContact] = useState(false);
   const [manualResume, setManualResume] = useState<ManualResume | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pre-submission lookup state
+  const [lookupResult, setLookupResult] = useState<LookupCandidateResponse | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
 
   const [duplicateResult, setDuplicateResult] = useState<{
     action: 'created' | 'attached' | 'updated';
@@ -260,6 +263,34 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     return () => { cancelled = true; };
   }, []); // Run once on mount
 
+  // Pre-submission duplicate lookup when LinkedIn URL is set
+  useEffect(() => {
+    if (!linkedinUrl || linkedinUrl.length < 10) {
+      setLookupResult(null);
+      return;
+    }
+
+    let cancelled = false;
+    const doLookup = async () => {
+      setIsLookingUp(true);
+      try {
+        const result = await apiClient.lookupCandidate(linkedinUrl, email || undefined);
+        if (!cancelled) {
+          setLookupResult(result.exists ? result : null);
+        }
+      } catch (err) {
+        console.log('[GoGio] Lookup failed (non-critical):', err);
+        if (!cancelled) setLookupResult(null);
+      } finally {
+        if (!cancelled) setIsLookingUp(false);
+      }
+    };
+
+    // Debounce lookup
+    const timer = setTimeout(doLookup, 1000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [linkedinUrl]);
+
   const resetForm = () => {
     setFirstName('');
     setLastName('');
@@ -273,6 +304,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     setSkills('');
     setNotes('');
     setDuplicateResult(null);
+    setLookupResult(null);
     setManualResume(null);
     // Keep linkedinUrl as user might add multiple from same profile
   };
@@ -505,6 +537,68 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           </div>
         )}
 
+        {/* Pre-submission: Already in ATS indicator */}
+        {lookupResult && lookupResult.exists && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 12px',
+            marginBottom: 12,
+            background: '#FFF8E1',
+            border: '1px solid #FFE082',
+            borderLeft: '3px solid #FFA000',
+            borderRadius: 8,
+            fontSize: 12,
+            fontFamily: 'Inter, sans-serif',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F57C00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <polyline points="16 11 18 13 22 9"/>
+            </svg>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, color: '#E65100', marginBottom: 2 }}>
+                Already in GoGio
+              </div>
+              {lookupResult.current_jobs && lookupResult.current_jobs.length > 0 && (
+                <div style={{ color: '#795548', fontSize: 11 }}>
+                  {lookupResult.current_jobs[0].job_title} | {lookupResult.current_jobs[0].stage_name}
+                </div>
+              )}
+            </div>
+            {lookupResult.candidate_url && (
+              <button
+                type="button"
+                onClick={() => window.open(
+                  `https://app.gogio.io${lookupResult.candidate_url}`,
+                  '_blank'
+                )}
+                title="Open in GoGio"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  background: '#FFF3E0',
+                  border: '1px solid #FFE082',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color: '#F57C00',
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Candidate Preview Card */}
         {hasPreviewData && (
           <div className="gogio-candidate-preview" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -635,25 +729,30 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                         }
                         
                         if (foundCount > 0) {
-                          toast.success(`Found ${foundCount} contact field${foundCount > 1 ? 's' : ''}`);
+                          toast.success(`Found ${foundCount} contact field${foundCount > 1 ? 's' : ''} from profile`);
+                          if ((email || contactData.email) && (phone || contactData.phone)) {
+                            return;
+                          }
+                        }
+                        
+                        if (email && phone) {
+                          toast.info(`Email: ${email.substring(0, 20)}${email.length > 20 ? '...' : ''} • Phone: ${phone}`);
                           return;
                         }
                         
-                        if (contactData.email || contactData.phone) {
-                          toast.info('Contact info already filled');
-                          return;
-                        }
-                        
-                        // Step 2: API enrichment fallback (1 credit)
                         if (!linkedinUrl) {
-                          toast.warning('LinkedIn URL required to fetch contact info');
+                          if (foundCount === 0) {
+                            toast.warning('LinkedIn URL required to fetch contact info');
+                          }
                           return;
                         }
                         
                         const enrichResult = await apiClient.enrichContact(linkedinUrl);
                         
                         if (!enrichResult.success) {
-                          toast.warning(enrichResult.message || 'No contact info found for this profile');
+                          if (foundCount === 0) {
+                            toast.warning(enrichResult.message || 'No contact info found for this profile');
+                          }
                           return;
                         }
                         
@@ -662,15 +761,28 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                           setEmail(enrichResult.email);
                           enrichedCount++;
                         }
-                        if (enrichResult.phone && !phone) {
-                          setPhone(enrichResult.phone);
+                        const enrichPhone = enrichResult.phone || 
+                          (enrichResult.contact_phones?.length > 0 
+                            ? (enrichResult.contact_phones[0].number || enrichResult.contact_phones[0].sanitized_number) 
+                            : null);
+                        if (enrichPhone && !phone) {
+                          setPhone(enrichPhone);
                           enrichedCount++;
                         }
+                        if (enrichResult.title && !currentRole) {
+                          setCurrentRole(enrichResult.title);
+                        }
+                        if (enrichResult.company && !currentCompany) {
+                          setCurrentCompany(enrichResult.company);
+                        }
                         
-                        if (enrichedCount > 0) {
-                          toast.success(`Found ${enrichedCount} contact field${enrichedCount > 1 ? 's' : ''}`);
+                        const totalFound = foundCount + enrichedCount;
+                        if (totalFound > 0) {
+                          toast.success(`Found ${totalFound} contact field${totalFound > 1 ? 's' : ''}`);
+                        } else if (email || phone) {
+                          toast.info('Contact info already in form');
                         } else {
-                          toast.info('Contact info already filled');
+                          toast.info('No new contact info found');
                         }
                       } catch (err: any) {
                         const parsed = (() => { try { return JSON.parse(err.message); } catch { return null; } })();
