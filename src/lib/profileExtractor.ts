@@ -1,5 +1,5 @@
-// LinkedIn Profile Data Extraction - Shared Module
-// Can be used by both content script and sidebar
+// LinkedIn Profile Data Extraction - Multi-Strategy Reactive Architecture
+// Resilient to DOM class changes by using structural, meta, and content-based strategies
 
 export interface LinkedInProfileData {
   fullName: string | null;
@@ -17,268 +17,388 @@ export interface ContactInfoData {
   twitter: string | null;
 }
 
-function getTextFromSelectors(selectors: string[], label: string): string | null {
-  for (const selector of selectors) {
-    try {
-      const el = document.querySelector(selector);
-      if (!el) continue;
-      // Prefer innerText (visible text only) over textContent (includes hidden/SR text)
-      const text = (el as HTMLElement).innerText?.trim() || el.textContent?.trim() || null;
-      if (text) {
-        console.log(`[GoGio][Extract] ${label} matched: "${selector}" → "${text.substring(0, 60)}"`);
-        return text;
-      }
-    } catch (e) {
-      // Invalid selector, skip
-    }
-  }
-  console.log(`[GoGio][Extract] ${label}: no selector matched`);
-  return null;
+interface StrategyResult {
+  value: string | null;
+  source: string;
+  confidence: number;
 }
 
-/**
- * Check if a text string looks like a geographic location
- * Filters out connection counts, button labels, and other non-location metadata
- */
+// ============================================================================
+// Utility Helpers
+// ============================================================================
+
+function cleanText(el: Element | null): string | null {
+  if (!el) return null;
+  const text = (el as HTMLElement).innerText?.trim() || el.textContent?.trim() || null;
+  return text && text.length > 0 ? text : null;
+}
+
 function looksLikeLocation(text: string): boolean {
   if (!text || text.length < 2) return false;
   const lower = text.toLowerCase();
-  // Reject LinkedIn metadata
   if (/connection|follower|mutual|message|\bconnect\b/i.test(lower)) return false;
-  // Reject purely numeric strings like "500+"
   if (/^\d[\d,+.\s]*$/.test(text.trim())) return false;
-  // Reject very short single-word strings that are likely labels
   if (text.length < 3 && !text.includes(',')) return false;
   return true;
 }
 
-/**
- * Extract location by trying multiple selectors and filtering candidates
- * Uses querySelectorAll to check all matches, not just the first
- */
-function extractLocation(): string | null {
-  const selectors = [
-    '.pv-top-card--list-bullet .text-body-small',
-    '.pb2 .text-body-small',
-    '.pv-top-card .text-body-small',
-    '.ph5 .text-body-small',
-    'span.text-body-small.inline.t-black--light.break-words',
-    '.pv-text-details__left-panel .text-body-small.inline',
-    'span.text-body-small[class*="t-black--light"]',
-    // New: broader structural selectors for 2025+ LinkedIn layout
-    'main section:first-of-type .text-body-small',
-    'main [class*="top-card"] .text-body-small',
-    '.text-body-small',
-  ];
+function looksLikeName(text: string): boolean {
+  if (!text || text.length < 2 || text.length > 80) return false;
+  const words = text.split(/\s+/);
+  if (words.length < 1 || words.length > 6) return false;
+  // Reject if it contains special chars typical of non-names
+  if (/[<>{}[\]|\\=+*#@$%^&]/.test(text)) return false;
+  // Reject if it looks like a button label or nav item
+  if (/^(home|messaging|notifications|jobs|my network|sign in|join now)$/i.test(text)) return false;
+  return true;
+}
 
-  for (const selector of selectors) {
-    try {
-      const elements = document.querySelectorAll(selector);
-      for (const el of elements) {
-        const text = (el as HTMLElement).innerText?.trim() || el?.textContent?.trim() || '';
-        if (text && looksLikeLocation(text)) {
-          console.log(`[GoGio][Extract] Location matched: "${selector}" → "${text.substring(0, 60)}"`);
-          return text;
-        }
+/** Pick best result from multiple strategies */
+function pickBest(results: StrategyResult[]): string | null {
+  const valid = results.filter(r => r.value != null && r.value.length > 0);
+  if (valid.length === 0) return null;
+  valid.sort((a, b) => b.confidence - a.confidence);
+  console.log(`[GoGio][Extract] Winner: "${valid[0].value?.substring(0, 60)}" via ${valid[0].source} (${valid[0].confidence})`);
+  return valid[0].value;
+}
+
+// Experience section heading terms (multi-locale)
+const EXPERIENCE_HEADINGS = [
+  'experience', 'experiencia', 'expérience', 'erfahrung', 'esperienza',
+  'experiência', 'ervaring', 'deneyim', 'опыт', 'doświadczenie',
+];
+
+function findExperienceSection(): Element | null {
+  // Strategy 1: id-based
+  const byId = document.querySelector('#experience') ||
+    document.querySelector('[id^="experience"]') ||
+    document.querySelector('section[id*="experience"]');
+  if (byId) return byId.closest('section') || byId;
+
+  // Strategy 2: heading text scan
+  const sections = document.querySelectorAll('main section, section');
+  for (const section of sections) {
+    const headings = section.querySelectorAll('h2, [class*="title"], span[aria-hidden="true"]');
+    for (const h of headings) {
+      const text = (h.textContent || '').toLowerCase().trim();
+      if (EXPERIENCE_HEADINGS.some(term => text === term || text.startsWith(term))) {
+        return section;
       }
-    } catch (e) {
-      // Invalid selector, skip
     }
   }
-  console.log('[GoGio][Extract] Location: no selector matched');
   return null;
 }
 
-/**
- * Parse headline for role and company as fallback
- * Handles patterns like:
- * - "Software Engineer at Google"
- * - "Senior PM @ Microsoft"
- * - "CTO | Startup Inc"
- */
+function getFirstExperienceItem(section: Element): Element | null {
+  return section.querySelector('li') || null;
+}
+
+// ============================================================================
+// Multi-Strategy Field Extractors
+// ============================================================================
+
+function extractFullName(): StrategyResult[] {
+  const results: StrategyResult[] = [];
+
+  // Strategy 1: main > first section h1 (most stable structural anchor)
+  try {
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      const sections = mainEl.querySelectorAll('section');
+      for (const section of sections) {
+        const h1 = section.querySelector('h1');
+        const text = cleanText(h1);
+        if (text && looksLikeName(text)) {
+          results.push({ value: text, source: 'main-section-h1', confidence: 0.95 });
+          break;
+        }
+      }
+      // Also try direct h1 child of main
+      if (!results.length) {
+        const h1 = mainEl.querySelector('h1');
+        const text = cleanText(h1);
+        if (text && looksLikeName(text)) {
+          results.push({ value: text, source: 'main-h1', confidence: 0.9 });
+        }
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  // Strategy 2: document.title parsing — "FirstName LastName - Headline | LinkedIn"
+  try {
+    const title = document.title;
+    if (title && title.includes('LinkedIn')) {
+      // Split on common separators
+      let namePart = title.split(' - ')[0]?.trim() ||
+        title.split(' | ')[0]?.trim() ||
+        title.split('–')[0]?.trim();
+      // Remove leading/trailing parens like "(1) John Doe"
+      namePart = namePart?.replace(/^\(\d+\)\s*/, '').trim();
+      if (namePart && looksLikeName(namePart) && namePart !== 'LinkedIn') {
+        results.push({ value: namePart, source: 'document-title', confidence: 0.8 });
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  // Strategy 3: og:title meta tag
+  try {
+    const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
+    if (ogTitle) {
+      const namePart = ogTitle.split(' - ')[0]?.trim();
+      if (namePart && looksLikeName(namePart)) {
+        results.push({ value: namePart, source: 'og-title', confidence: 0.75 });
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  // Strategy 4: any h1 on page that looks name-like
+  try {
+    const allH1s = document.querySelectorAll('h1');
+    for (const h1 of allH1s) {
+      const text = cleanText(h1);
+      if (text && looksLikeName(text)) {
+        // Lower confidence since it could be any h1
+        results.push({ value: text, source: 'any-h1', confidence: 0.6 });
+        break;
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  // Strategy 5: profile slug fallback — /in/john-doe-123/ → "John Doe"
+  try {
+    const match = window.location.pathname.match(/\/in\/([^/]+)/);
+    if (match) {
+      const slug = match[1]
+        .replace(/-\w{4,}$/, '') // remove trailing hash
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+      if (slug && slug.length > 2) {
+        results.push({ value: slug, source: 'url-slug', confidence: 0.4 });
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  return results;
+}
+
+function extractHeadline(): StrategyResult[] {
+  const results: StrategyResult[] = [];
+
+  // Strategy 1: sibling of h1 in main — walk from name h1 to next text element
+  try {
+    const mainEl = document.querySelector('main');
+    const h1 = mainEl?.querySelector('h1');
+    if (h1) {
+      // Walk siblings and parent's siblings
+      let candidate = h1.nextElementSibling;
+      for (let i = 0; i < 5 && candidate; i++) {
+        const text = cleanText(candidate);
+        if (text && text.length > 10 && text.length < 300 && !looksLikeLocation(text)) {
+          results.push({ value: text, source: 'h1-sibling', confidence: 0.85 });
+          break;
+        }
+        candidate = candidate.nextElementSibling;
+      }
+
+      // Also check parent container's next sibling
+      if (!results.length) {
+        const parentDiv = h1.closest('div');
+        if (parentDiv) {
+          let nextDiv = parentDiv.nextElementSibling;
+          for (let i = 0; i < 3 && nextDiv; i++) {
+            const text = cleanText(nextDiv);
+            if (text && text.length > 10 && text.length < 300) {
+              results.push({ value: text, source: 'h1-parent-sibling', confidence: 0.8 });
+              break;
+            }
+            nextDiv = nextDiv.nextElementSibling;
+          }
+        }
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  // Strategy 2: document.title — text between first " - " and " | "
+  try {
+    const title = document.title;
+    const dashIdx = title.indexOf(' - ');
+    const pipeIdx = title.lastIndexOf(' | ');
+    if (dashIdx > 0 && pipeIdx > dashIdx) {
+      const headline = title.substring(dashIdx + 3, pipeIdx).trim();
+      if (headline && headline.length > 5) {
+        results.push({ value: headline, source: 'document-title', confidence: 0.7 });
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  // Strategy 3: meta description
+  try {
+    const desc = document.querySelector('meta[name="description"]')?.getAttribute('content') ||
+      document.querySelector('meta[property="og:description"]')?.getAttribute('content');
+    if (desc) {
+      // LinkedIn meta descriptions often start with the headline
+      const firstSentence = desc.split('.')[0]?.trim();
+      if (firstSentence && firstSentence.length > 10 && firstSentence.length < 200) {
+        results.push({ value: firstSentence, source: 'meta-description', confidence: 0.6 });
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  return results;
+}
+
+function extractLocationField(): StrategyResult[] {
+  const results: StrategyResult[] = [];
+
+  // Strategy 1: walk elements near the h1, find location-like text
+  try {
+    const mainEl = document.querySelector('main');
+    const h1 = mainEl?.querySelector('h1');
+    if (h1) {
+      // Walk up to the top-card container, then scan all small text elements
+      const container = h1.closest('section') || h1.closest('div[class]') || mainEl;
+      if (container) {
+        const textEls = container.querySelectorAll('span, div');
+        for (const el of textEls) {
+          // Skip elements that are or contain the h1
+          if (el.contains(h1) || h1.contains(el)) continue;
+          const text = cleanText(el);
+          if (text && looksLikeLocation(text) && text.length < 100) {
+            // Validate: should have comma or look geographic
+            const hasComma = text.includes(',');
+            const hasGeoWords = /\b(area|region|city|metro|greater|county|state|province)\b/i.test(text);
+            const looksGeo = hasComma || hasGeoWords || /^[A-Z][a-z]/.test(text);
+            if (looksGeo) {
+              results.push({ value: text, source: 'near-h1-scan', confidence: 0.7 });
+              break;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  // Strategy 2: meta geo.region or geo.placename
+  try {
+    const geoPlace = document.querySelector('meta[name="geo.placename"]')?.getAttribute('content');
+    if (geoPlace) {
+      results.push({ value: geoPlace, source: 'meta-geo', confidence: 0.5 });
+    }
+  } catch (e) { /* skip */ }
+
+  return results;
+}
+
+function extractCurrentCompany(): StrategyResult[] {
+  const results: StrategyResult[] = [];
+
+  // Strategy 1: first company link in main (a[href*="/company/"])
+  try {
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      const companyLinks = mainEl.querySelectorAll('a[href*="/company/"]');
+      for (const link of companyLinks) {
+        const text = cleanText(link);
+        if (text && text.length > 1 && text.length < 100) {
+          results.push({ value: text, source: 'company-link', confidence: 0.85 });
+          break;
+        }
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  // Strategy 2: experience section — first entry, non-bold text
+  try {
+    const expSection = findExperienceSection();
+    if (expSection) {
+      const firstItem = getFirstExperienceItem(expSection);
+      if (firstItem) {
+        // Company is typically in a non-bold span with "· Full-time" suffix
+        const spans = firstItem.querySelectorAll('span[aria-hidden="true"]');
+        for (const span of spans) {
+          const text = cleanText(span);
+          if (text && text.length > 1) {
+            // Check if this is NOT the role (roles are usually bold)
+            const isBold = span.closest('[class*="bold"]') ||
+              span.closest('strong') ||
+              (span.parentElement?.style?.fontWeight && parseInt(span.parentElement.style.fontWeight) >= 600);
+            if (!isBold) {
+              const company = text.split('·')[0].trim();
+              if (company && company.length > 1) {
+                results.push({ value: company, source: 'experience-section', confidence: 0.75 });
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  return results;
+}
+
+function extractCurrentRole(): StrategyResult[] {
+  const results: StrategyResult[] = [];
+
+  // Strategy 1: experience section — first entry, bold text
+  try {
+    const expSection = findExperienceSection();
+    if (expSection) {
+      const firstItem = getFirstExperienceItem(expSection);
+      if (firstItem) {
+        // Role is typically in a bold span
+        const boldEls = firstItem.querySelectorAll('[class*="bold"] span[aria-hidden="true"], strong span, [class*="t-bold"] span[aria-hidden="true"]');
+        for (const el of boldEls) {
+          const text = cleanText(el);
+          if (text && text.length > 1 && text.length < 100) {
+            results.push({ value: text, source: 'experience-bold', confidence: 0.75 });
+            break;
+          }
+        }
+        // Fallback: first visible span in the first item
+        if (!results.length) {
+          const spans = firstItem.querySelectorAll('span[aria-hidden="true"]');
+          if (spans.length > 0) {
+            const text = cleanText(spans[0]);
+            if (text && text.length > 1) {
+              results.push({ value: text, source: 'experience-first-span', confidence: 0.6 });
+            }
+          }
+        }
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  return results;
+}
+
 function parseHeadlineForRoleCompany(headline: string | null): { role: string | null; company: string | null } {
   if (!headline) return { role: null, company: null };
-
-  // Pattern: "Role at Company" (case insensitive)
   const atMatch = headline.match(/^(.+?)\s+at\s+(.+?)(?:\s*[|·•–-]|$)/i);
-  if (atMatch) {
-    return { role: atMatch[1].trim(), company: atMatch[2].trim() };
-  }
-
-  // Pattern: "Role @ Company"
+  if (atMatch) return { role: atMatch[1].trim(), company: atMatch[2].trim() };
   const atSymbolMatch = headline.match(/^(.+?)\s*@\s*(.+?)(?:\s*[|·•–-]|$)/i);
-  if (atSymbolMatch) {
-    return { role: atSymbolMatch[1].trim(), company: atSymbolMatch[2].trim() };
-  }
-
-  // Pattern: "Role | Company" or "Role · Company"
+  if (atSymbolMatch) return { role: atSymbolMatch[1].trim(), company: atSymbolMatch[2].trim() };
   const separatorMatch = headline.match(/^(.+?)\s*[|·•–-]\s*(.+?)$/);
-  if (separatorMatch) {
-    return { role: separatorMatch[1].trim(), company: separatorMatch[2].trim() };
-  }
-
+  if (separatorMatch) return { role: separatorMatch[1].trim(), company: separatorMatch[2].trim() };
   return { role: null, company: null };
 }
 
-/**
- * Extract the name using structural DOM walking as a last resort
- * LinkedIn always has the name as the first h1 inside the main profile section
- */
-function extractNameFallback(): string | null {
-  try {
-    // Walk from main > first section > find h1
-    const mainEl = document.querySelector('main');
-    if (!mainEl) return null;
-    
-    const sections = mainEl.querySelectorAll('section');
-    for (const section of sections) {
-      const h1 = section.querySelector('h1');
-      if (h1) {
-        const text = (h1 as HTMLElement).innerText?.trim() || h1.textContent?.trim() || '';
-        if (text && text.length > 1 && text.length < 100) {
-          console.log(`[GoGio][Extract] Name from structural walk: "${text}"`);
-          return text;
-        }
-      }
-    }
-  } catch (e) {
-    // silently fail
-  }
-  return null;
-}
+// ============================================================================
+// Main Extraction (synchronous, single-pass)
+// ============================================================================
 
-/**
- * Extract profile data from the current LinkedIn page DOM
- * Works in both content script and sidebar context since both have access to the same DOM
- */
 export function extractProfileData(): LinkedInProfileData {
-  console.log('[GoGio][Extract] Starting profile extraction...');
+  console.log('[GoGio][Extract] Starting multi-strategy extraction...');
 
-  // Name selectors - broadest partial-match first, then structural, then exact legacy
-  let fullName = getTextFromSelectors([
-    'h1[class*="text-heading"]',
-    'main section:first-of-type h1',
-    '.pv-top-card h1',
-    '.ph5 h1',
-    'h1.text-heading-xlarge',
-    'h1.inline.t-24',
-    '.pv-top-card--list h1',
-    'section.pv-top-card h1',
-    'h1',
-  ], 'Name');
+  const fullName = pickBest(extractFullName());
+  const headline = pickBest(extractHeadline());
+  const location = pickBest(extractLocationField());
 
-  // Structural fallback for name
-  if (!fullName) {
-    fullName = extractNameFallback();
-  }
+  let currentCompany = pickBest(extractCurrentCompany());
+  let currentRole = pickBest(extractCurrentRole());
 
-  // Headline selectors
-  const headline = getTextFromSelectors([
-    '.pv-top-card .text-body-medium',
-    '.ph5 .text-body-medium',
-    'main section:first-of-type .text-body-medium',
-    '.text-body-medium',
-    'div.text-body-medium.break-words',
-    '.pv-text-details__left-panel .text-body-medium',
-    '[data-generated-suggestion-target]',
-  ], 'Headline');
-
-  // Location - uses filtering to avoid grabbing connection counts or other metadata
-  const location = extractLocation();
-
-  // Experience section for current role/company
-  let currentCompany: string | null = null;
-  let currentRole: string | null = null;
-
-  try {
-    // Try multiple ways to find the experience section
-    const experienceSection = 
-      document.querySelector('#experience') || 
-      document.querySelector('[id^="experience"]') ||
-      document.querySelector('section[id*="experience"]') ||
-      document.querySelector('[data-section="experience"]') ||
-      document.querySelector('.pvs-list__outer-container')?.closest('section') ||
-      // Find by profilePagedListComponent pattern
-      document.querySelector('[id*="profilePagedListComponent"]')?.closest('section') ||
-      // Find section that contains "Experience" heading
-      Array.from(document.querySelectorAll('section')).find(section => {
-        const heading = section.querySelector('h2, [class*="title"], span[aria-hidden="true"]');
-        return heading?.textContent?.toLowerCase().includes('experience');
-      });
-
-    if (experienceSection) {
-      console.log('[GoGio][Extract] Found experience section');
-      
-      // Get first experience item (most recent)
-      const firstExp = 
-        experienceSection.querySelector('.pvs-entity--padded') ||
-        experienceSection.querySelector('.pvs-entity') ||
-        experienceSection.querySelector('li.artdeco-list__item') ||
-        experienceSection.querySelector('li[class*="artdeco"]') ||
-        experienceSection.querySelector('li');
-      
-      if (firstExp) {
-        console.log('[GoGio][Extract] Found first experience entry');
-        
-        // Role/title selectors - try multiple patterns
-        const roleEl = 
-          firstExp.querySelector('.pvs-entity__path-node ~ div span[aria-hidden="true"]') ||
-          firstExp.querySelector('div.display-flex.align-items-center.mr1 span[aria-hidden="true"]') ||
-          firstExp.querySelector('span.mr1.t-bold span[aria-hidden="true"]') ||
-          firstExp.querySelector('.t-bold span[aria-hidden="true"]') ||
-          firstExp.querySelector('[data-anonymize="title"]') ||
-          firstExp.querySelector('.hoverable-link-text.t-bold span') ||
-          firstExp.querySelector('.t-bold > span') ||
-          firstExp.querySelector('span.t-bold');
-        
-        currentRole = roleEl ? ((roleEl as HTMLElement).innerText?.trim() || roleEl.textContent?.trim() || null) : null;
-        if (currentRole) {
-          console.log('[GoGio][Extract] Role:', currentRole);
-        }
-
-        // Company name selectors - try multiple patterns
-        const companyEl = 
-          firstExp.querySelector('.t-14.t-normal span[aria-hidden="true"]') ||
-          firstExp.querySelector('span.t-14.t-normal span[aria-hidden="true"]') ||
-          firstExp.querySelector('[data-anonymize="company-name"]') ||
-          firstExp.querySelector('.t-normal:not(.t-black--light) span[aria-hidden="true"]') ||
-          firstExp.querySelector('.hoverable-link-text:not(.t-bold) span');
-        
-        if (companyEl) {
-          // Company text might include " · Full-time", clean it up
-          const companyText = (companyEl as HTMLElement).innerText?.trim() || companyEl.textContent?.trim() || '';
-          currentCompany = companyText.split('·')[0].trim() || null;
-          if (currentCompany) {
-            console.log('[GoGio][Extract] Company:', currentCompany);
-          }
-        }
-      }
-    } else {
-      console.log('[GoGio][Extract] Experience section not found');
-    }
-  } catch (e) {
-    console.warn('[GoGio][Extract] Experience extraction error:', e);
-  }
-
-  // Fallback: try to get company/role from the intro card
-  if (!currentRole || !currentCompany) {
-    try {
-      const introSection = document.querySelector('.pv-text-details__right-panel');
-      if (introSection) {
-        const buttons = introSection.querySelectorAll('button');
-        buttons.forEach(btn => {
-          const text = btn.textContent?.trim() || '';
-          if (!currentCompany && text && !text.includes('Contact') && !text.includes('connection')) {
-            currentCompany = text;
-          }
-        });
-      }
-    } catch (e) {
-      // Silently fail
-    }
-  }
-
-  // Fallback: parse headline for role and company
+  // Headline fallback for role/company
   if (!currentRole || !currentCompany) {
     const parsed = parseHeadlineForRoleCompany(headline);
     if (!currentRole && parsed.role) {
@@ -291,10 +411,13 @@ export function extractProfileData(): LinkedInProfileData {
     }
   }
 
-  const profileUrl = window.location.href;
+  // Clean profile URL (remove overlay paths like /overlay/contact-info/)
+  let profileUrl = window.location.href;
+  const overlayIdx = profileUrl.indexOf('/overlay/');
+  if (overlayIdx > 0) profileUrl = profileUrl.substring(0, overlayIdx) + '/';
 
   const result = { fullName, headline, location, currentCompany, currentRole, profileUrl };
-  console.log('[GoGio][Extract] Extraction result:', {
+  console.log('[GoGio][Extract] Result:', {
     hasName: !!fullName,
     hasHeadline: !!headline,
     hasLocation: !!location,
@@ -305,44 +428,173 @@ export function extractProfileData(): LinkedInProfileData {
   return result;
 }
 
+// ============================================================================
+// Reactive Extraction (MutationObserver + retry schedule)
+// ============================================================================
+
 /**
- * Extract profile data with retry logic for LinkedIn SPA rendering
- * Attempts extraction up to 3 times with increasing delays
+ * Reactive profile extractor with retry schedule + MutationObserver.
+ * Calls onResult whenever extraction improves. Stabilizes when two
+ * consecutive passes produce the same fullName.
+ * 
+ * Returns a cleanup function to cancel.
+ */
+export function extractProfileDataReactive(
+  onResult: (data: LinkedInProfileData, stable: boolean) => void,
+  signal?: AbortSignal
+): () => void {
+  let lastResult: LinkedInProfileData | null = null;
+  let lastFullName: string | null = null;
+  let stabilized = false;
+  let observer: MutationObserver | null = null;
+  const timers: number[] = [];
+
+  function isAborted() {
+    return signal?.aborted === true;
+  }
+
+  function countFields(data: LinkedInProfileData): number {
+    let count = 0;
+    if (data.fullName) count++;
+    if (data.headline) count++;
+    if (data.location) count++;
+    if (data.currentCompany) count++;
+    if (data.currentRole) count++;
+    return count;
+  }
+
+  function runExtraction() {
+    if (isAborted() || stabilized) return;
+
+    const data = extractProfileData();
+    const currentFields = countFields(data);
+    const previousFields = lastResult ? countFields(lastResult) : 0;
+
+    // Only emit if we have more data than before, or first run
+    if (currentFields > previousFields || !lastResult) {
+      lastResult = data;
+      onResult(data, false);
+    }
+
+    // Stability check: fullName matched twice in a row and we have core fields
+    if (data.fullName && data.fullName === lastFullName && currentFields >= 2) {
+      stabilized = true;
+      console.log('[GoGio][Extract] Extraction stabilized');
+      onResult(lastResult!, true);
+      cleanup();
+      return;
+    }
+
+    lastFullName = data.fullName;
+  }
+
+  function cleanup() {
+    timers.forEach(t => clearTimeout(t));
+    timers.length = 0;
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+  }
+
+  // Retry schedule: immediate, then increasing delays
+  const delays = [0, 150, 400, 900, 1800];
+  delays.forEach(delay => {
+    const t = window.setTimeout(() => {
+      if (!isAborted()) runExtraction();
+    }, delay);
+    timers.push(t);
+  });
+
+  // MutationObserver on <main> or <body>
+  try {
+    const target = document.querySelector('main') || document.body;
+    let debounceTimer: number | null = null;
+
+    observer = new MutationObserver(() => {
+      if (isAborted() || stabilized) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        runExtraction();
+      }, 500);
+    });
+
+    observer.observe(target, { childList: true, subtree: true });
+
+    // Auto-disconnect after 10 seconds
+    const autoDisconnect = window.setTimeout(() => {
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+        console.log('[GoGio][Extract] MutationObserver auto-disconnected (10s)');
+        // Final extraction attempt
+        if (!stabilized && !isAborted()) {
+          runExtraction();
+          if (lastResult) {
+            stabilized = true;
+            onResult(lastResult, true);
+          }
+        }
+      }
+    }, 10000);
+    timers.push(autoDisconnect);
+  } catch (e) {
+    console.warn('[GoGio][Extract] MutationObserver setup failed:', e);
+  }
+
+  // Listen for abort
+  signal?.addEventListener('abort', cleanup);
+
+  return cleanup;
+}
+
+/**
+ * Legacy API — kept for backward compatibility with content script message handler.
+ * Uses retry schedule without MutationObserver.
  */
 export async function extractProfileDataWithRetry(): Promise<LinkedInProfileData> {
-  const delays = [800, 1500, 3000];
+  const delays = [0, 150, 400, 900, 1800];
 
-  for (let attempt = 0; attempt < delays.length; attempt++) {
-    await new Promise(resolve => setTimeout(resolve, delays[attempt]));
-    
-    console.log(`[GoGio][Extract] Attempt ${attempt + 1}/${delays.length}...`);
+  let best: LinkedInProfileData | null = null;
+  let bestCount = 0;
+
+  for (const delay of delays) {
+    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
     const data = extractProfileData();
-    
-    if (data.fullName) {
-      console.log(`[GoGio][Extract] Success on attempt ${attempt + 1}`);
+    let count = 0;
+    if (data.fullName) count++;
+    if (data.headline) count++;
+    if (data.location) count++;
+    if (data.currentCompany) count++;
+    if (data.currentRole) count++;
+
+    if (count > bestCount) {
+      best = data;
+      bestCount = count;
+    }
+
+    // Early exit if we got everything
+    if (count >= 4) {
+      console.log(`[GoGio][Extract] Got ${count} fields on attempt with delay ${delay}ms`);
       return data;
     }
   }
 
-  console.warn('[GoGio][Extract] All retry attempts exhausted, returning last result');
-  return extractProfileData();
+  return best || extractProfileData();
 }
 
-/**
- * Check if we're on a LinkedIn profile page
- */
+// ============================================================================
+// Existing utilities (unchanged)
+// ============================================================================
+
 export function isLinkedInProfilePage(): boolean {
   return window.location.href.includes('linkedin.com/in/');
 }
 
-/**
- * Wait for an element to appear in the DOM
- */
 function waitForElement(selector: string, timeout: number): Promise<Element | null> {
   return new Promise((resolve) => {
     const el = document.querySelector(selector);
     if (el) return resolve(el);
-
     const observer = new MutationObserver(() => {
       const foundEl = document.querySelector(selector);
       if (foundEl) {
@@ -350,9 +602,7 @@ function waitForElement(selector: string, timeout: number): Promise<Element | nu
         resolve(foundEl);
       }
     });
-
     observer.observe(document.body, { childList: true, subtree: true });
-
     setTimeout(() => {
       observer.disconnect();
       resolve(null);
@@ -360,14 +610,9 @@ function waitForElement(selector: string, timeout: number): Promise<Element | nu
   });
 }
 
-/**
- * Extract contact info from LinkedIn's Contact Info modal
- * Opens the modal, extracts data, then closes it
- */
 export async function extractContactInfo(): Promise<ContactInfoData> {
   console.log('[GoGio] Starting contact info extraction...');
   
-  // Find the contact info link/button - try multiple selectors
   const contactLink = document.querySelector('#top-card-text-details-contact-info') ||
                       document.querySelector('a[href*="contact-info"]') ||
                       document.querySelector('[data-control-name="contact_see_more"]');
@@ -377,10 +622,8 @@ export async function extractContactInfo(): Promise<ContactInfoData> {
     return { email: null, phone: null, website: null, twitter: null };
   }
   
-  console.log('[GoGio] Found contact link, clicking...');
   (contactLink as HTMLElement).click();
   
-  // Wait for modal to appear - try multiple selectors
   const modalSelectors = [
     '.pv-contact-info',
     '.artdeco-modal[role="dialog"]',
@@ -391,94 +634,66 @@ export async function extractContactInfo(): Promise<ContactInfoData> {
   let modal: Element | null = null;
   for (const selector of modalSelectors) {
     modal = await waitForElement(selector, 2000);
-    if (modal) {
-      console.log('[GoGio] Found modal with selector:', selector);
-      break;
-    }
+    if (modal) break;
   }
   
   if (!modal) {
-    console.log('[GoGio] Contact info modal did not appear');
     return { email: null, phone: null, website: null, twitter: null };
   }
   
-  // Give the modal content a moment to fully load
   await new Promise(resolve => setTimeout(resolve, 500));
-  
-  console.log('[GoGio] Modal content preview:', modal.textContent?.substring(0, 500));
   
   let email: string | null = null;
   let phone: string | null = null;
   let website: string | null = null;
   let twitter: string | null = null;
   
-  // Try to extract from mailto/tel links first
   const emailLink = modal.querySelector('a[href^="mailto:"]');
   if (emailLink) {
     email = emailLink.getAttribute('href')?.replace('mailto:', '')?.trim() || 
             emailLink.textContent?.trim() || null;
-    console.log('[GoGio] Found email from link:', email);
   }
   
   const phoneLink = modal.querySelector('a[href^="tel:"]');
   if (phoneLink) {
     phone = phoneLink.getAttribute('href')?.replace('tel:', '')?.trim() ||
             phoneLink.textContent?.trim() || null;
-    console.log('[GoGio] Found phone from link:', phone);
   }
   
-  // Look for website links (exclude mailto, tel, linkedin, twitter/x)
   const allLinks = modal.querySelectorAll('a[href]');
   allLinks.forEach(link => {
     const href = link.getAttribute('href') || '';
     if (href.includes('twitter.com') || href.includes('x.com')) {
       twitter = href;
-      console.log('[GoGio] Found twitter:', twitter);
     } else if (!href.startsWith('mailto:') && 
                !href.startsWith('tel:') && 
                !href.includes('linkedin.com') &&
                href.startsWith('http')) {
       website = href;
-      console.log('[GoGio] Found website:', website);
     }
   });
   
-  // Fallback: regex extraction from modal text content
   if (!email || !phone) {
     const modalText = modal.textContent || '';
-    
     if (!email) {
       const emailMatch = modalText.match(/[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}/);
-      if (emailMatch) {
-        email = emailMatch[0];
-        console.log('[GoGio] Found email via regex:', email);
-      }
+      if (emailMatch) email = emailMatch[0];
     }
-    
     if (!phone) {
-      // Match various phone formats
       const phoneMatch = modalText.match(/(?:\+\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}/);
-      if (phoneMatch) {
-        phone = phoneMatch[0].trim();
-        console.log('[GoGio] Found phone via regex:', phone);
-      }
+      if (phoneMatch) phone = phoneMatch[0].trim();
     }
   }
   
-  // Close the modal
   const closeButton = modal.querySelector('button[aria-label="Dismiss"]') ||
                       modal.querySelector('.artdeco-modal__dismiss') ||
                       modal.querySelector('button.artdeco-button--circle');
   
   if (closeButton) {
-    console.log('[GoGio] Closing modal...');
     (closeButton as HTMLElement).click();
   } else {
-    // Try pressing Escape as fallback
-    console.log('[GoGio] No close button found, pressing Escape');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   }
   
-  console.log('[GoGio] Extracted contact info:', { email, phone, website, twitter });
   return { email, phone, website, twitter };
 }
