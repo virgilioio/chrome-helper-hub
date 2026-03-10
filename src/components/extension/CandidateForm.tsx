@@ -93,6 +93,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   const [currentCompany, setCurrentCompany] = useState('');
   const [currentRole, setCurrentRole] = useState('');
   const [city, setCity] = useState('');
+  const [locationState, setLocationState] = useState('');
   const [country, setCountry] = useState('');
   const [summary, setSummary] = useState('');
   const [skills, setSkills] = useState('');
