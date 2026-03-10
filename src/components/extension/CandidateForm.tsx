@@ -361,6 +361,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
       company_current: currentCompany.trim(),
       role_current: currentRole.trim(),
       location_city: city.trim(),
+      location_state: locationState.trim(),
       location_country: country.trim(),
       profile_summary: summary.trim(),
       skills: skills.trim() ? skills.split(',').map(s => s.trim()).filter(Boolean) : [],
