@@ -335,27 +335,21 @@ function extractCurrentCompany(): StrategyResult[] {
     }
   } catch (e) { /* skip */ }
 
-  // Strategy 2: experience section — first entry, non-bold text
+  // Strategy 2: experience section — first entry, second visible span is company
   try {
     const expSection = findExperienceSection();
     if (expSection) {
       const firstItem = getFirstExperienceItem(expSection);
       if (firstItem) {
-        // Company is typically in a non-bold span with "· Full-time" suffix
+        // In LinkedIn's experience list, span[aria-hidden="true"] order: [role, company, dates, ...]
         const spans = firstItem.querySelectorAll('span[aria-hidden="true"]');
-        for (const span of spans) {
-          const text = cleanText(span);
+        if (spans.length >= 2) {
+          const text = cleanText(spans[1]);
           if (text && text.length > 1) {
-            // Check if this is NOT the role (roles are usually bold)
-            const isBold = span.closest('[class*="bold"]') ||
-              span.closest('strong') ||
-              (span.parentElement?.style?.fontWeight && parseInt(span.parentElement.style.fontWeight) >= 600);
-            if (!isBold) {
-              const company = text.split('·')[0].trim();
-              if (company && company.length > 1) {
-                results.push({ value: company, source: 'experience-section', confidence: 0.75 });
-                break;
-              }
+            // Strip employment type suffixes: "Company · Full-time"
+            const company = text.split('·')[0].trim();
+            if (company && company.length > 1) {
+              results.push({ value: company, source: 'experience-section', confidence: 0.75 });
             }
           }
         }
