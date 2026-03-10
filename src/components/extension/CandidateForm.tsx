@@ -97,11 +97,14 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   const [summary, setSummary] = useState('');
   const [skills, setSkills] = useState('');
   const [notes, setNotes] = useState('');
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingContact, setIsFetchingContact] = useState(false);
   const [manualResume, setManualResume] = useState<ManualResume | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pre-submission lookup state
+  const [lookupResult, setLookupResult] = useState<LookupCandidateResponse | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
 
   const [duplicateResult, setDuplicateResult] = useState<{
     action: 'created' | 'attached' | 'updated';
