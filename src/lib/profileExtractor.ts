@@ -33,6 +33,24 @@ function cleanText(el: Element | null): string | null {
   return text && text.length > 0 ? text : null;
 }
 
+/** Strip LinkedIn artifacts from extracted name text */
+function cleanName(text: string | null): string | null {
+  if (!text) return null;
+  let cleaned = text;
+  // Remove pronoun patterns like (He/Him), (She/Her), (They/Them), etc.
+  cleaned = cleaned.replace(/\s*\([^)]*\/[^)]*\)\s*/g, ' ');
+  // Remove connection degree indicators
+  cleaned = cleaned.replace(/\b(1st|2nd|3rd)\b(\s*(degree\s*)?connection)?/gi, '');
+  // Remove verification badges (Unicode checkmarks and text)
+  cleaned = cleaned.replace(/[\u2713\u2714\u2705\u2611\u2B50\uD83D\uDD35\uD83D\uDFE2]/gu, '');
+  cleaned = cleaned.replace(/\bVerified\b/gi, '');
+  // Remove "· " prefix sometimes prepended
+  cleaned = cleaned.replace(/^[·•–-]\s*/, '');
+  // Collapse whitespace
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 function looksLikeLocation(text: string): boolean {
   if (!text || text.length < 2) return false;
   const lower = text.toLowerCase();
