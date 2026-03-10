@@ -170,6 +170,8 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
   // Auto-fill from LinkedIn profile
   useEffect(() => {
     let cancelled = false;
+    let cleanupReactive: (() => void) | null = null;
+    let cleanupAbort: (() => void) | null = null;
 
     const fetchLinkedInData = async () => {
       // Check if we're in content script context (sidebar on LinkedIn)
