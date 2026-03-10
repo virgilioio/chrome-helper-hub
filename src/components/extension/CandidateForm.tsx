@@ -299,7 +299,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
     // Debounce lookup
     const timer = setTimeout(doLookup, 1000);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [linkedinUrl]);
+  }, [linkedinUrl, email]);
 
   const resetForm = () => {
     setFirstName('');
