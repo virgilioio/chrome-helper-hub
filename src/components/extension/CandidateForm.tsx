@@ -666,25 +666,30 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                         }
                         
                         if (foundCount > 0) {
-                          toast.success(`Found ${foundCount} contact field${foundCount > 1 ? 's' : ''}`);
+                          toast.success(`Found ${foundCount} contact field${foundCount > 1 ? 's' : ''} from profile`);
+                          if ((email || contactData.email) && (phone || contactData.phone)) {
+                            return;
+                          }
+                        }
+                        
+                        if (email && phone) {
+                          toast.info(`Email: ${email.substring(0, 20)}${email.length > 20 ? '...' : ''} • Phone: ${phone}`);
                           return;
                         }
                         
-                        if (contactData.email || contactData.phone) {
-                          toast.info('Contact info already filled');
-                          return;
-                        }
-                        
-                        // Step 2: API enrichment fallback (1 credit)
                         if (!linkedinUrl) {
-                          toast.warning('LinkedIn URL required to fetch contact info');
+                          if (foundCount === 0) {
+                            toast.warning('LinkedIn URL required to fetch contact info');
+                          }
                           return;
                         }
                         
                         const enrichResult = await apiClient.enrichContact(linkedinUrl);
                         
                         if (!enrichResult.success) {
-                          toast.warning(enrichResult.message || 'No contact info found for this profile');
+                          if (foundCount === 0) {
+                            toast.warning(enrichResult.message || 'No contact info found for this profile');
+                          }
                           return;
                         }
                         
@@ -693,15 +698,28 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
                           setEmail(enrichResult.email);
                           enrichedCount++;
                         }
-                        if (enrichResult.phone && !phone) {
-                          setPhone(enrichResult.phone);
+                        const enrichPhone = enrichResult.phone || 
+                          (enrichResult.contact_phones?.length > 0 
+                            ? (enrichResult.contact_phones[0].number || enrichResult.contact_phones[0].sanitized_number) 
+                            : null);
+                        if (enrichPhone && !phone) {
+                          setPhone(enrichPhone);
                           enrichedCount++;
                         }
+                        if (enrichResult.title && !currentRole) {
+                          setCurrentRole(enrichResult.title);
+                        }
+                        if (enrichResult.company && !currentCompany) {
+                          setCurrentCompany(enrichResult.company);
+                        }
                         
-                        if (enrichedCount > 0) {
-                          toast.success(`Found ${enrichedCount} contact field${enrichedCount > 1 ? 's' : ''}`);
+                        const totalFound = foundCount + enrichedCount;
+                        if (totalFound > 0) {
+                          toast.success(`Found ${totalFound} contact field${totalFound > 1 ? 's' : ''}`);
+                        } else if (email || phone) {
+                          toast.info('Contact info already in form');
                         } else {
-                          toast.info('Contact info already filled');
+                          toast.info('No new contact info found');
                         }
                       } catch (err: any) {
                         const parsed = (() => { try { return JSON.parse(err.message); } catch { return null; } })();
