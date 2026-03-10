@@ -363,29 +363,18 @@ function extractCurrentCompany(): StrategyResult[] {
 function extractCurrentRole(): StrategyResult[] {
   const results: StrategyResult[] = [];
 
-  // Strategy 1: experience section — first entry, bold text
+  // Strategy 1: experience section — first entry, first visible span is role
   try {
     const expSection = findExperienceSection();
     if (expSection) {
       const firstItem = getFirstExperienceItem(expSection);
       if (firstItem) {
-        // Role is typically in a bold span
-        const boldEls = firstItem.querySelectorAll('[class*="bold"] span[aria-hidden="true"], strong span, [class*="t-bold"] span[aria-hidden="true"]');
-        for (const el of boldEls) {
-          const text = cleanText(el);
+        // In LinkedIn's experience list, span[aria-hidden="true"] order: [role, company, dates, ...]
+        const spans = firstItem.querySelectorAll('span[aria-hidden="true"]');
+        if (spans.length > 0) {
+          const text = cleanText(spans[0]);
           if (text && text.length > 1 && text.length < 100) {
-            results.push({ value: text, source: 'experience-bold', confidence: 0.75 });
-            break;
-          }
-        }
-        // Fallback: first visible span in the first item
-        if (!results.length) {
-          const spans = firstItem.querySelectorAll('span[aria-hidden="true"]');
-          if (spans.length > 0) {
-            const text = cleanText(spans[0]);
-            if (text && text.length > 1) {
-              results.push({ value: text, source: 'experience-first-span', confidence: 0.6 });
-            }
+            results.push({ value: text, source: 'experience-first-span', confidence: 0.75 });
           }
         }
       }
