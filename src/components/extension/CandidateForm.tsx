@@ -261,11 +261,16 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
 
       if (location) {
         const parts = location.split(',').map((p: string) => p.trim());
-        if (parts.length >= 2 && (!city && !country || stable)) {
+        if (parts.length >= 3 && (!city && !country || stable)) {
           setCity(parts[0]);
-          setCountry(parts.slice(1).join(', '));
-        } else if (parts.length === 1 && (!city || stable)) {
+          setLocationState(parts[1]);
+          setCountry(parts[2]);
+        } else if (parts.length === 2 && (!city && !country || stable)) {
           setCity(parts[0]);
+          setLocationState('');
+          setCountry(parts[1]);
+        } else if (parts.length === 1 && (!country || stable)) {
+          setCountry(parts[0]);
         }
       }
 
