@@ -182,7 +182,7 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           const abortController = new AbortController();
           cleanupReactive = extractProfileDataReactive((data, stable) => {
             if (!cancelled) {
-              applyProfileData(data);
+              applyProfileData(data, stable);
               console.log('[GoGio] Autofill update:', { hasName: !!data.fullName, stable });
             }
           }, abortController.signal);
@@ -215,7 +215,9 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
       }
     };
 
-    // Apply profile data to form (only fills empty fields)
+    // Apply profile data to form
+    // On unstable (early) passes: only fill empty fields
+    // On stable passes: overwrite with higher-confidence data
     const applyProfileData = (data: {
       fullName: string | null;
       headline: string | null;
@@ -223,46 +225,54 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
       currentCompany: string | null;
       currentRole: string | null;
       profileUrl: string;
-    }) => {
+    }, stable = false) => {
       if (!data) return;
 
       const { fullName, headline, location, profileUrl } = data;
 
-      // Only fill empty fields (non-destructive)
-      if (fullName && !firstName && !lastName) {
+      if (fullName) {
         const parts = fullName.split(' ');
-        setFirstName(parts[0] || '');
-        setLastName(parts.slice(1).join(' ') || '');
+        const newFirst = parts[0] || '';
+        const newLast = parts.slice(1).join(' ') || '';
+        if ((!firstName && !lastName) || (stable && (newFirst !== firstName || newLast !== lastName))) {
+          setFirstName(newFirst);
+          setLastName(newLast);
+        }
       }
 
-      if (data.currentRole && !currentRole) {
-        setCurrentRole(data.currentRole);
+      if (data.currentRole) {
+        if (!currentRole || (stable && data.currentRole !== currentRole)) {
+          setCurrentRole(data.currentRole);
+        }
       }
 
-      if (data.currentCompany && !currentCompany) {
-        setCurrentCompany(data.currentCompany);
+      if (data.currentCompany) {
+        if (!currentCompany || (stable && data.currentCompany !== currentCompany)) {
+          setCurrentCompany(data.currentCompany);
+        }
       }
 
-      if (headline && !summary) {
-        setSummary(headline);
+      if (headline) {
+        if (!summary || (stable && headline !== summary)) {
+          setSummary(headline);
+        }
       }
 
       if (location) {
-        // Try to split "City, Country" format
         const parts = location.split(',').map((p: string) => p.trim());
-        if (parts.length >= 2 && !city && !country) {
+        if (parts.length >= 2 && (!city && !country || stable)) {
           setCity(parts[0]);
           setCountry(parts.slice(1).join(', '));
-        } else if (parts.length === 1 && !city) {
+        } else if (parts.length === 1 && (!city || stable)) {
           setCity(parts[0]);
         }
       }
 
-      if (profileUrl && !linkedinUrl) {
+      if (profileUrl && (!linkedinUrl || stable)) {
         setLinkedinUrl(profileUrl);
       }
 
-      console.log('[GoGio] Auto-filled form from LinkedIn profile');
+      console.log('[GoGio] Auto-filled form from LinkedIn profile', { stable });
     };
 
     fetchLinkedInData();

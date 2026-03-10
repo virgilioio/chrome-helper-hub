@@ -33,6 +33,24 @@ function cleanText(el: Element | null): string | null {
   return text && text.length > 0 ? text : null;
 }
 
+/** Strip LinkedIn artifacts from extracted name text */
+function cleanName(text: string | null): string | null {
+  if (!text) return null;
+  let cleaned = text;
+  // Remove pronoun patterns like (He/Him), (She/Her), (They/Them), etc.
+  cleaned = cleaned.replace(/\s*\([^)]*\/[^)]*\)\s*/g, ' ');
+  // Remove connection degree indicators
+  cleaned = cleaned.replace(/\b(1st|2nd|3rd)\b(\s*(degree\s*)?connection)?/gi, '');
+  // Remove verification badges (Unicode checkmarks and text)
+  cleaned = cleaned.replace(/[\u2713\u2714\u2705\u2611\u2B50\uD83D\uDD35\uD83D\uDFE2]/gu, '');
+  cleaned = cleaned.replace(/\bVerified\b/gi, '');
+  // Remove "· " prefix sometimes prepended
+  cleaned = cleaned.replace(/^[·•–-]\s*/, '');
+  // Collapse whitespace
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 function looksLikeLocation(text: string): boolean {
   if (!text || text.length < 2) return false;
   const lower = text.toLowerCase();
@@ -107,7 +125,7 @@ function extractFullName(): StrategyResult[] {
       const sections = mainEl.querySelectorAll('section');
       for (const section of sections) {
         const h1 = section.querySelector('h1');
-        const text = cleanText(h1);
+        const text = cleanName(cleanText(h1));
         if (text && looksLikeName(text)) {
           results.push({ value: text, source: 'main-section-h1', confidence: 0.95 });
           break;
@@ -116,7 +134,7 @@ function extractFullName(): StrategyResult[] {
       // Also try direct h1 child of main
       if (!results.length) {
         const h1 = mainEl.querySelector('h1');
-        const text = cleanText(h1);
+        const text = cleanName(cleanText(h1));
         if (text && looksLikeName(text)) {
           results.push({ value: text, source: 'main-h1', confidence: 0.9 });
         }
@@ -155,9 +173,8 @@ function extractFullName(): StrategyResult[] {
   try {
     const allH1s = document.querySelectorAll('h1');
     for (const h1 of allH1s) {
-      const text = cleanText(h1);
+      const text = cleanName(cleanText(h1));
       if (text && looksLikeName(text)) {
-        // Lower confidence since it could be any h1
         results.push({ value: text, source: 'any-h1', confidence: 0.6 });
         break;
       }
@@ -184,6 +201,9 @@ function extractFullName(): StrategyResult[] {
 function extractHeadline(): StrategyResult[] {
   const results: StrategyResult[] = [];
 
+  // Blocklist for headline candidates
+  const headlineBlocklist = /\bconnection|follower|mutual|message\b/i;
+
   // Strategy 1: sibling of h1 in main — walk from name h1 to next text element
   try {
     const mainEl = document.querySelector('main');
@@ -192,9 +212,11 @@ function extractHeadline(): StrategyResult[] {
       // Walk siblings and parent's siblings
       let candidate = h1.nextElementSibling;
       for (let i = 0; i < 5 && candidate; i++) {
-        const text = cleanText(candidate);
-        if (text && text.length > 10 && text.length < 300 && !looksLikeLocation(text)) {
-          results.push({ value: text, source: 'h1-sibling', confidence: 0.85 });
+        // Prefer direct child text node or first div's text to avoid grabbing entire containers
+        const directDiv = candidate.querySelector('div');
+        const rawText = directDiv ? cleanText(directDiv) : cleanText(candidate);
+        if (rawText && rawText.length > 10 && rawText.length < 150 && !headlineBlocklist.test(rawText) && !looksLikeLocation(rawText)) {
+          results.push({ value: rawText, source: 'h1-sibling', confidence: 0.85 });
           break;
         }
         candidate = candidate.nextElementSibling;
@@ -206,9 +228,10 @@ function extractHeadline(): StrategyResult[] {
         if (parentDiv) {
           let nextDiv = parentDiv.nextElementSibling;
           for (let i = 0; i < 3 && nextDiv; i++) {
-            const text = cleanText(nextDiv);
-            if (text && text.length > 10 && text.length < 300) {
-              results.push({ value: text, source: 'h1-parent-sibling', confidence: 0.8 });
+            const directDiv = nextDiv.querySelector('div');
+            const rawText = directDiv ? cleanText(directDiv) : cleanText(nextDiv);
+            if (rawText && rawText.length > 10 && rawText.length < 150 && !headlineBlocklist.test(rawText)) {
+              results.push({ value: rawText, source: 'h1-parent-sibling', confidence: 0.8 });
               break;
             }
             nextDiv = nextDiv.nextElementSibling;
@@ -250,28 +273,33 @@ function extractHeadline(): StrategyResult[] {
 function extractLocationField(): StrategyResult[] {
   const results: StrategyResult[] = [];
 
+  // Blocklist for location scan
+  const locationBlocklist = /\bconnection|follower|mutual|message|\bmore\b|\bconnect\b/i;
+
   // Strategy 1: walk elements near the h1, find location-like text
   try {
     const mainEl = document.querySelector('main');
     const h1 = mainEl?.querySelector('h1');
     if (h1) {
-      // Walk up to the top-card container, then scan all small text elements
-      const container = h1.closest('section') || h1.closest('div[class]') || mainEl;
+      // Narrow scan: only within the h1's parent container (intro card), not entire section
+      const container = h1.parentElement?.parentElement || h1.closest('div[class]');
       if (container) {
         const textEls = container.querySelectorAll('span, div');
+        const extractedName = cleanName(cleanText(h1));
         for (const el of textEls) {
-          // Skip elements that are or contain the h1
           if (el.contains(h1) || h1.contains(el)) continue;
           const text = cleanText(el);
-          if (text && looksLikeLocation(text) && text.length < 100) {
-            // Validate: should have comma or look geographic
-            const hasComma = text.includes(',');
-            const hasGeoWords = /\b(area|region|city|metro|greater|county|state|province)\b/i.test(text);
-            const looksGeo = hasComma || hasGeoWords || /^[A-Z][a-z]/.test(text);
-            if (looksGeo) {
-              results.push({ value: text, source: 'near-h1-scan', confidence: 0.7 });
-              break;
-            }
+          if (!text || text.length >= 100 || text.length < 3) continue;
+          // Skip if it matches name or headline-like content
+          if (extractedName && text === extractedName) continue;
+          if (locationBlocklist.test(text)) continue;
+          if (!looksLikeLocation(text)) continue;
+          const hasComma = text.includes(',');
+          const hasGeoWords = /\b(area|region|city|metro|greater|county|state|province)\b/i.test(text);
+          const looksGeo = hasComma || hasGeoWords || /^[A-Z][a-z]/.test(text);
+          if (looksGeo) {
+            results.push({ value: text, source: 'near-h1-scan', confidence: 0.7 });
+            break;
           }
         }
       }
@@ -307,27 +335,21 @@ function extractCurrentCompany(): StrategyResult[] {
     }
   } catch (e) { /* skip */ }
 
-  // Strategy 2: experience section — first entry, non-bold text
+  // Strategy 2: experience section — first entry, second visible span is company
   try {
     const expSection = findExperienceSection();
     if (expSection) {
       const firstItem = getFirstExperienceItem(expSection);
       if (firstItem) {
-        // Company is typically in a non-bold span with "· Full-time" suffix
+        // In LinkedIn's experience list, span[aria-hidden="true"] order: [role, company, dates, ...]
         const spans = firstItem.querySelectorAll('span[aria-hidden="true"]');
-        for (const span of spans) {
-          const text = cleanText(span);
+        if (spans.length >= 2) {
+          const text = cleanText(spans[1]);
           if (text && text.length > 1) {
-            // Check if this is NOT the role (roles are usually bold)
-            const isBold = span.closest('[class*="bold"]') ||
-              span.closest('strong') ||
-              (span.parentElement?.style?.fontWeight && parseInt(span.parentElement.style.fontWeight) >= 600);
-            if (!isBold) {
-              const company = text.split('·')[0].trim();
-              if (company && company.length > 1) {
-                results.push({ value: company, source: 'experience-section', confidence: 0.75 });
-                break;
-              }
+            // Strip employment type suffixes: "Company · Full-time"
+            const company = text.split('·')[0].trim();
+            if (company && company.length > 1) {
+              results.push({ value: company, source: 'experience-section', confidence: 0.75 });
             }
           }
         }
@@ -341,29 +363,18 @@ function extractCurrentCompany(): StrategyResult[] {
 function extractCurrentRole(): StrategyResult[] {
   const results: StrategyResult[] = [];
 
-  // Strategy 1: experience section — first entry, bold text
+  // Strategy 1: experience section — first entry, first visible span is role
   try {
     const expSection = findExperienceSection();
     if (expSection) {
       const firstItem = getFirstExperienceItem(expSection);
       if (firstItem) {
-        // Role is typically in a bold span
-        const boldEls = firstItem.querySelectorAll('[class*="bold"] span[aria-hidden="true"], strong span, [class*="t-bold"] span[aria-hidden="true"]');
-        for (const el of boldEls) {
-          const text = cleanText(el);
+        // In LinkedIn's experience list, span[aria-hidden="true"] order: [role, company, dates, ...]
+        const spans = firstItem.querySelectorAll('span[aria-hidden="true"]');
+        if (spans.length > 0) {
+          const text = cleanText(spans[0]);
           if (text && text.length > 1 && text.length < 100) {
-            results.push({ value: text, source: 'experience-bold', confidence: 0.75 });
-            break;
-          }
-        }
-        // Fallback: first visible span in the first item
-        if (!results.length) {
-          const spans = firstItem.querySelectorAll('span[aria-hidden="true"]');
-          if (spans.length > 0) {
-            const text = cleanText(spans[0]);
-            if (text && text.length > 1) {
-              results.push({ value: text, source: 'experience-first-span', confidence: 0.6 });
-            }
+            results.push({ value: text, source: 'experience-first-span', confidence: 0.75 });
           }
         }
       }
