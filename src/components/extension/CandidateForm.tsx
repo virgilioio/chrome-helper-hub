@@ -536,6 +536,68 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({ userEmail, onSetti
           </div>
         )}
 
+        {/* Pre-submission: Already in ATS indicator */}
+        {lookupResult && lookupResult.exists && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 12px',
+            marginBottom: 12,
+            background: '#FFF8E1',
+            border: '1px solid #FFE082',
+            borderLeft: '3px solid #FFA000',
+            borderRadius: 8,
+            fontSize: 12,
+            fontFamily: 'Inter, sans-serif',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F57C00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <polyline points="16 11 18 13 22 9"/>
+            </svg>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, color: '#E65100', marginBottom: 2 }}>
+                Already in GoGio
+              </div>
+              {lookupResult.current_jobs && lookupResult.current_jobs.length > 0 && (
+                <div style={{ color: '#795548', fontSize: 11 }}>
+                  {lookupResult.current_jobs[0].job_title} | {lookupResult.current_jobs[0].stage_name}
+                </div>
+              )}
+            </div>
+            {lookupResult.candidate_url && (
+              <button
+                type="button"
+                onClick={() => window.open(
+                  `https://app.gogio.io${lookupResult.candidate_url}`,
+                  '_blank'
+                )}
+                title="Open in GoGio"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  background: '#FFF3E0',
+                  border: '1px solid #FFE082',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color: '#F57C00',
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Candidate Preview Card */}
         {hasPreviewData && (
           <div className="gogio-candidate-preview" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
