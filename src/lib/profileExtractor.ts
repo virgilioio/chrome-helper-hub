@@ -173,9 +173,8 @@ function extractFullName(): StrategyResult[] {
   try {
     const allH1s = document.querySelectorAll('h1');
     for (const h1 of allH1s) {
-      const text = cleanText(h1);
+      const text = cleanName(cleanText(h1));
       if (text && looksLikeName(text)) {
-        // Lower confidence since it could be any h1
         results.push({ value: text, source: 'any-h1', confidence: 0.6 });
         break;
       }
